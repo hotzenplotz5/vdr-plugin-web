@@ -24,7 +24,7 @@ BrowserClient::BrowserClient(std::string vdrIp, int vdrPort) {
 
     client = new CefBrowserClient(protocol);
 
-    GlobalOutput.setOutputFunction(browserClientOutputFunction);
+    TOutput::instance().setOutputFunction(browserClientOutputFunction);
 }
 
 BrowserClient::~BrowserClient() {

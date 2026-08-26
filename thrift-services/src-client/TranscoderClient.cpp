@@ -24,7 +24,7 @@ TranscoderClient::TranscoderClient(std::string vdrIp, int vdrPort) {
 
     client = new RemoteTranscoderClient(protocol);
 
-    GlobalOutput.setOutputFunction(transcoderClientOutputFunction);
+    TOutput::instance().setOutputFunction(transcoderClientOutputFunction);
 }
 
 TranscoderClient::~TranscoderClient() {

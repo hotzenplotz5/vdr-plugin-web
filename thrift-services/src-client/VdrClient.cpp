@@ -24,7 +24,7 @@ VdrClient::VdrClient(std::string vdrIp, int vdrPort) {
 
     client = new VdrPluginWebClient(protocol);
 
-    GlobalOutput.setOutputFunction(vdrClientOutputFunction);
+    TOutput::instance().setOutputFunction(vdrClientOutputFunction);
 }
 
 VdrClient::~VdrClient() {
