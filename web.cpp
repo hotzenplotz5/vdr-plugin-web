@@ -424,17 +424,14 @@ bool cPluginWeb::ProcessArgs(int argc, char *argv[]) {
     };
 
     int c, option_index = 0;
-    bool configFound = false;
+    std::string configFilename;
 
     while ((c = getopt_long(argc, argv, "c:fosbn:", long_options, &option_index)) != -1)
     {
         switch (c)
         {
             case 'c':
-                configFound = true;
-                if (!readConfiguration(optarg)) {
-                    exit(-1);
-                }
+                configFilename = std::string(optarg);
                 break;
 
             case 'f':
@@ -462,9 +459,14 @@ bool cPluginWeb::ProcessArgs(int argc, char *argv[]) {
         }
     }
 
-    if (!configFound) {
-        esyslog("[vdrweb] Plugin configuration parameter -c/--config is mandatory");
-        exit(1);
+    if (configFilename.empty()) {
+        // set default
+        isyslog("[vdrweb] Using default config file /etc/vdr/socket.ini");
+        configFilename = "/etc/vdr/socket.ini";
+    }
+
+    if (!readConfiguration(configFilename.c_str())) {
+        exit(-1);
     }
 
     return true;
