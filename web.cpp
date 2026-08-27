@@ -424,11 +424,14 @@ bool cPluginWeb::ProcessArgs(int argc, char *argv[]) {
     };
 
     int c, option_index = 0;
+    bool configFound = false;
+
     while ((c = getopt_long(argc, argv, "c:fosbn:", long_options, &option_index)) != -1)
     {
         switch (c)
         {
             case 'c':
+                configFound = true;
                 if (!readConfiguration(optarg)) {
                     exit(-1);
                 }
@@ -458,6 +461,12 @@ bool cPluginWeb::ProcessArgs(int argc, char *argv[]) {
                 break;
         }
     }
+
+    if (!configFound) {
+        esyslog("[vdrweb] Plugin configuration parameter -c/--config is mandatory");
+        exit(1);
+    }
+
     return true;
 }
 

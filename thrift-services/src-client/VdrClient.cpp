@@ -87,7 +87,7 @@ template <typename F> bool VdrClient::processInternal(F&& request) {
 }
 
 bool VdrClient::ProcessOsdUpdate(int disp_width, int disp_height, int x, int y, int width, int height, std::string& data) {
-    DEBUGLOG("VdrClient::ProcessOsdUpdate");
+    // DEBUGLOG("VdrClient::ProcessOsdUpdate");
 
     return processInternal([&]() -> bool {
         ProcessOsdUpdateType input;
@@ -104,7 +104,7 @@ bool VdrClient::ProcessOsdUpdate(int disp_width, int disp_height, int x, int y, 
 }
 
 bool VdrClient::ProcessOsdUpdateQoi(int disp_width, int disp_height, int x, int y, const std::string &imageQoi) {
-    DEBUGLOG("VdrClient::ProcessOsdUpdateQoi");
+    // DEBUGLOG("VdrClient::ProcessOsdUpdateQoi");
 
     return processInternal([&]() -> bool {
         ProcessOsdUpdateQOIType input;
@@ -217,7 +217,7 @@ bool VdrClient::SelectAudioTrack(std::string& nr) {
 }
 
 bool VdrClient::IsWebActive() {
-    DEBUGLOG("VdrClient::IsWebActive");
+    // DEBUGLOG("VdrClient::IsWebActive");
 
     return processInternal([&]() -> bool {
         return client->IsWebActive();
