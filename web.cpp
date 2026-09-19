@@ -12,6 +12,7 @@
 #include <vdr/tools.h>
 #include <vdr/videodir.h>
 #include <Magick++.h>
+#include <chrono>
 #include <mutex>
 
 #include <memory>
@@ -64,7 +65,7 @@ constexpr const char *VDRSUITE_HBBTV_BLANK_PAGE =
 enum class VdrSuiteHbbtvUiCommandType {
     None,
     Launch,
-    Close
+    FinalizeClose
 };
 
 struct VdrSuiteHbbtvUiCommand {
@@ -108,6 +109,13 @@ void clearVdrSuiteHbbtvUiCommand()
 {
     std::lock_guard<std::mutex> lock(vdrSuiteHbbtvUiMutex);
     vdrSuiteHbbtvUiCommand = {};
+}
+
+std::uint64_t monotonicMilliseconds()
+{
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
 }
@@ -560,9 +568,41 @@ bool cPluginWeb::Start() {
         };
     runtimeHooks.scheduleClose =
         [](const std::string& sessionId) {
-            return queueVdrSuiteHbbtvUiCommand(
-                VdrSuiteHbbtvUiCommandType::Close,
-                sessionId);
+            if (browserClient == nullptr ||
+                !VdrSuiteHbbtvPresentationStore::BeginClose(
+                    sessionId,
+                    monotonicMilliseconds()))
+            {
+                return false;
+            }
+
+            if (!browserClient->LoadUrl(VDRSUITE_HBBTV_BLANK_PAGE))
+            {
+                VdrSuiteHbbtvPresentationStore::CancelClose(sessionId);
+                return false;
+            }
+
+            return true;
+        };
+    runtimeHooks.closeConfirmation =
+        [](const std::string& sessionId) {
+            const VdrSuiteHbbtvRuntimeCloseConfirmation confirmation =
+                VdrSuiteHbbtvPresentationStore::CloseConfirmation(
+                    sessionId,
+                    monotonicMilliseconds());
+
+            if (confirmation ==
+                VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed)
+            {
+                if (!queueVdrSuiteHbbtvUiCommand(
+                        VdrSuiteHbbtvUiCommandType::FinalizeClose,
+                        sessionId))
+                {
+                    return VdrSuiteHbbtvRuntimeCloseConfirmation::Failed;
+                }
+            }
+
+            return confirmation;
         };
     runtimeHooks.sendInput =
         [](const std::string&, const std::string& key) {
@@ -628,21 +668,10 @@ cOsdObject *cPluginWeb::MainMenuAction() {
     const VdrSuiteHbbtvUiCommand runtimeCommand =
         takeVdrSuiteHbbtvUiCommand();
 
-    if (runtimeCommand.type == VdrSuiteHbbtvUiCommandType::Close) {
-        const bool closed =
-            browserClient != nullptr &&
-            browserClient->LoadUrl(VDRSUITE_HBBTV_BLANK_PAGE);
-
-        if (closed) {
-            VdrSuiteHbbtvPresentationStore::EndSession(
-                runtimeCommand.sessionId);
-        }
-
-        if (vdrSuiteHbbtvRuntimeService != nullptr) {
-            vdrSuiteHbbtvRuntimeService->CompleteClose(
-                runtimeCommand.sessionId,
-                closed);
-        }
+    if (runtimeCommand.type ==
+        VdrSuiteHbbtvUiCommandType::FinalizeClose) {
+        VdrSuiteHbbtvPresentationStore::EndSession(
+            runtimeCommand.sessionId);
 
         if (useDummyOsd)
             return new cDummyOsdObject();

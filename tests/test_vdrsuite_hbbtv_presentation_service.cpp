@@ -142,6 +142,40 @@ int main()
         VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN);
     assert(hidden.frameRevision == 3);
 
+    assert(VdrSuiteHbbtvPresentationStore::BeginClose(
+        "session-overlay", 1000));
+    assert(
+        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
+            "session-overlay", 1001) ==
+        VdrSuiteHbbtvRuntimeCloseConfirmation::Pending);
+
+    const std::uint8_t visibleAgain[] = {
+        0x00, 0x00, 0xff, 0xff
+    };
+    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+        visibleAgain, 2, 2, 0, 0, 1, 1));
+    assert(
+        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
+            "session-overlay", 1002) ==
+        VdrSuiteHbbtvRuntimeCloseConfirmation::Pending);
+
+    const std::uint8_t clearAgain[] = {
+        0x00, 0x00, 0x00, 0x00
+    };
+    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+        clearAgain, 2, 2, 0, 0, 1, 1));
+    assert(
+        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
+            "session-overlay", 1003) ==
+        VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed);
+
+    assert(VdrSuiteHbbtvPresentationStore::BeginClose(
+        "session-overlay", 2000));
+    assert(
+        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
+            "session-overlay", 7000) ==
+        VdrSuiteHbbtvRuntimeCloseConfirmation::Failed);
+
     auto staleChunk = request(
         VDRWEB_HBBTV_PRESENTATION_CHUNK,
         "session-overlay",

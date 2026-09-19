@@ -75,6 +75,8 @@ int main()
     int launchCount = 0;
     int closeCount = 0;
     int inputCount = 0;
+    VdrSuiteHbbtvRuntimeCloseConfirmation closeConfirmation =
+        VdrSuiteHbbtvRuntimeCloseConfirmation::Pending;
 
     std::string launchedSession;
     std::string launchedChannel;
@@ -95,6 +97,11 @@ int main()
             ++closeCount;
             closedSession = sessionId;
             return true;
+        };
+    hooks.closeConfirmation =
+        [&](const std::string& sessionId) {
+            assert(sessionId == "session-a");
+            return closeConfirmation;
         };
     hooks.sendInput =
         [&](const std::string& sessionId, const std::string& key) {
@@ -244,7 +251,31 @@ int main()
     assert(close.state == VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
     assert(closeCount == 1);
     assert(closedSession == "session-a");
-    assert(runtime.CompleteClose("session-a", true));
+
+    auto closingStatus = makeRequest(
+        VDRWEB_HBBTV_RUNTIME_STATUS,
+        "session-a",
+        channel,
+        1,
+        revision);
+    assert(runtime.Handle(closingStatus));
+    assert(closingStatus.result == VDRWEB_HBBTV_RUNTIME_RESULT_OK);
+    assert(closingStatus.state == VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
+
+    closeConfirmation =
+        VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed;
+
+    auto closedStatus = makeRequest(
+        VDRWEB_HBBTV_RUNTIME_STATUS,
+        "session-a",
+        channel,
+        1,
+        revision);
+    assert(runtime.Handle(closedStatus));
+    assert(
+        closedStatus.result ==
+        VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE);
+    assert(closedStatus.state == VDRWEB_HBBTV_RUNTIME_STATE_NONE);
 
     auto afterClose = makeRequest(
         VDRWEB_HBBTV_RUNTIME_INPUT,

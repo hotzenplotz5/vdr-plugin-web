@@ -60,6 +60,14 @@ public:
     static void BeginSession(const std::string& sessionId);
     static void EndSession(const std::string& sessionId = {});
 
+    static bool BeginClose(
+        const std::string& sessionId,
+        std::uint64_t nowMilliseconds);
+    static void CancelClose(const std::string& sessionId);
+    static VdrSuiteHbbtvRuntimeCloseConfirmation CloseConfirmation(
+        const std::string& sessionId,
+        std::uint64_t nowMilliseconds);
+
     static bool ApplyBgraPatch(
         const std::uint8_t* image,
         int renderWidth,

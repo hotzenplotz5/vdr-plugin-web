@@ -89,9 +89,17 @@ struct VdrWebHbbtvRuntimeV1 {
     std::uint16_t reservedResponse;
 };
 
+enum class VdrSuiteHbbtvRuntimeCloseConfirmation : std::uint8_t {
+    Pending = 0,
+    Confirmed = 1,
+    Failed = 2
+};
+
 struct VdrSuiteHbbtvRuntimeHooks {
     std::function<bool(const std::string&, const std::string&)> scheduleLaunch;
     std::function<bool(const std::string&)> scheduleClose;
+    std::function<VdrSuiteHbbtvRuntimeCloseConfirmation(const std::string&)>
+        closeConfirmation;
     std::function<bool(const std::string&, const std::string&)> sendInput;
 };
 
@@ -377,13 +385,54 @@ private:
         const std::string& channelId,
         VdrWebHbbtvRuntimeV1& response)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!sameContext(active_, request, sessionId, channelId)) {
-            response.result = VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE;
+        std::uint8_t currentState = VDRWEB_HBBTV_RUNTIME_STATE_NONE;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!sameContext(active_, request, sessionId, channelId)) {
+                response.result = VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE;
+                return true;
+            }
+            currentState = active_.state;
+        }
+
+        if (currentState == VDRWEB_HBBTV_RUNTIME_STATE_CLOSING &&
+            hooks_.closeConfirmation)
+        {
+            const VdrSuiteHbbtvRuntimeCloseConfirmation confirmation =
+                hooks_.closeConfirmation(sessionId);
+
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!sameContext(active_, request, sessionId, channelId)) {
+                response.result = VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE;
+                return true;
+            }
+
+            if (confirmation ==
+                VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed)
+            {
+                active_ = {};
+                response.result =
+                    VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE;
+                response.state = VDRWEB_HBBTV_RUNTIME_STATE_NONE;
+                return true;
+            }
+
+            if (confirmation ==
+                VdrSuiteHbbtvRuntimeCloseConfirmation::Failed)
+            {
+                active_.state = VDRWEB_HBBTV_RUNTIME_STATE_FAILED;
+                response.result = VDRWEB_HBBTV_RUNTIME_RESULT_OK;
+                response.state = VDRWEB_HBBTV_RUNTIME_STATE_FAILED;
+                return true;
+            }
+
+            response.result = VDRWEB_HBBTV_RUNTIME_RESULT_OK;
+            response.state = VDRWEB_HBBTV_RUNTIME_STATE_CLOSING;
             return true;
         }
+
         response.result = VDRWEB_HBBTV_RUNTIME_RESULT_OK;
-        response.state = active_.state;
+        response.state = currentState;
         return true;
     }
 

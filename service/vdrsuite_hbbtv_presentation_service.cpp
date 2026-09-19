@@ -17,6 +17,7 @@ namespace
 constexpr std::uint32_t MaximumRenderWidth = 3840U;
 constexpr std::uint32_t MaximumRenderHeight = 2160U;
 constexpr std::size_t MaximumEncodedBytes = 16U * 1024U * 1024U;
+constexpr std::uint64_t CloseConfirmationTimeoutMilliseconds = 5000U;
 
 struct PresentationState {
     std::string sessionId;
@@ -26,6 +27,9 @@ struct PresentationState {
     std::uint64_t observedAt = 0;
     std::uint64_t encodedRevision = 0;
     std::size_t visibleAlphaPixels = 0;
+    bool closePending = false;
+    std::uint64_t closeAfterRevision = 0;
+    std::uint64_t closeDeadlineMilliseconds = 0;
     std::vector<std::uint8_t> bgra;
     std::vector<std::uint8_t> encodedQoi;
 };
@@ -199,6 +203,74 @@ void VdrSuiteHbbtvPresentationStore::EndSession(
         return;
     }
     presentation = {};
+}
+
+bool VdrSuiteHbbtvPresentationStore::BeginClose(
+    const std::string& sessionId,
+    std::uint64_t nowMilliseconds)
+{
+    std::lock_guard<std::mutex> lock(presentationMutex);
+    if (sessionId.empty() ||
+        presentation.sessionId != sessionId)
+    {
+        return false;
+    }
+
+    presentation.closePending = true;
+    presentation.closeAfterRevision = presentation.frameRevision;
+    presentation.closeDeadlineMilliseconds =
+        nowMilliseconds >
+                std::numeric_limits<std::uint64_t>::max() -
+                    CloseConfirmationTimeoutMilliseconds
+            ? std::numeric_limits<std::uint64_t>::max()
+            : nowMilliseconds + CloseConfirmationTimeoutMilliseconds;
+    return true;
+}
+
+void VdrSuiteHbbtvPresentationStore::CancelClose(
+    const std::string& sessionId)
+{
+    std::lock_guard<std::mutex> lock(presentationMutex);
+    if (!sessionId.empty() &&
+        presentation.sessionId == sessionId)
+    {
+        presentation.closePending = false;
+        presentation.closeAfterRevision = 0;
+        presentation.closeDeadlineMilliseconds = 0;
+    }
+}
+
+VdrSuiteHbbtvRuntimeCloseConfirmation
+VdrSuiteHbbtvPresentationStore::CloseConfirmation(
+    const std::string& sessionId,
+    std::uint64_t nowMilliseconds)
+{
+    std::lock_guard<std::mutex> lock(presentationMutex);
+    if (sessionId.empty() ||
+        presentation.sessionId != sessionId ||
+        !presentation.closePending)
+    {
+        return VdrSuiteHbbtvRuntimeCloseConfirmation::Failed;
+    }
+
+    if (presentation.frameRevision > presentation.closeAfterRevision &&
+        presentation.visibleAlphaPixels == 0U)
+    {
+        presentation.closePending = false;
+        presentation.closeAfterRevision = 0;
+        presentation.closeDeadlineMilliseconds = 0;
+        return VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed;
+    }
+
+    if (nowMilliseconds >= presentation.closeDeadlineMilliseconds)
+    {
+        presentation.closePending = false;
+        presentation.closeAfterRevision = 0;
+        presentation.closeDeadlineMilliseconds = 0;
+        return VdrSuiteHbbtvRuntimeCloseConfirmation::Failed;
+    }
+
+    return VdrSuiteHbbtvRuntimeCloseConfirmation::Pending;
 }
 
 bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
