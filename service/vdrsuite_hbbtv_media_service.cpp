@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cctype>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <fcntl.h>
@@ -76,21 +79,24 @@ public:
 
     void stop()
     {
-        if (stopping_.exchange(true, std::memory_order_acq_rel))
-            return;
+        const bool wasStopping =
+            stopping_.exchange(true, std::memory_order_acq_rel);
 
-        int listenFd = -1;
-        int clientFd = -1;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            listenFd = listenFd_;
-            clientFd = clientFd_;
+        if (!wasStopping) {
+            int listenFd = -1;
+            int clientFd = -1;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                listenFd = listenFd_;
+                clientFd = clientFd_;
+            }
+
+            if (clientFd >= 0)
+                ::shutdown(clientFd, SHUT_RDWR);
+            if (listenFd >= 0)
+                ::shutdown(listenFd, SHUT_RDWR);
         }
 
-        if (clientFd >= 0)
-            ::shutdown(clientFd, SHUT_RDWR);
-        if (listenFd >= 0)
-            ::shutdown(listenFd, SHUT_RDWR);
         wake_.notify_all();
 
         if (writer_.joinable())
