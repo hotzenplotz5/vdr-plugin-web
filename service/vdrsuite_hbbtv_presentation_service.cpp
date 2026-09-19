@@ -25,6 +25,7 @@ struct PresentationState {
     std::uint64_t frameRevision = 0;
     std::uint64_t observedAt = 0;
     std::uint64_t encodedRevision = 0;
+    std::size_t visibleAlphaPixels = 0;
     std::vector<std::uint8_t> bgra;
     std::vector<std::uint8_t> encodedQoi;
 };
@@ -249,6 +250,7 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
         presentation.bgra.assign(pixelCount * 4U, 0U);
         presentation.frameRevision = 0;
         presentation.encodedRevision = 0;
+        presentation.visibleAlphaPixels = 0;
         presentation.encodedQoi.clear();
     }
 
@@ -266,10 +268,31 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
                  destinationStride) +
             static_cast<std::size_t>(x) * 4U;
 
-        std::memcpy(
-            presentation.bgra.data() + destinationOffset,
-            image + sourceOffset,
-            sourceStride);
+        for (int column = 0; column < width; ++column)
+        {
+            const std::size_t sourcePixel =
+                sourceOffset + static_cast<std::size_t>(column) * 4U;
+            const std::size_t destinationPixel =
+                destinationOffset + static_cast<std::size_t>(column) * 4U;
+
+            const bool wasVisible =
+                presentation.bgra[destinationPixel + 3U] != 0U;
+            const bool isVisible =
+                image[sourcePixel + 3U] != 0U;
+
+            if (wasVisible != isVisible)
+            {
+                if (isVisible)
+                    ++presentation.visibleAlphaPixels;
+                else if (presentation.visibleAlphaPixels != 0U)
+                    --presentation.visibleAlphaPixels;
+            }
+
+            std::memcpy(
+                presentation.bgra.data() + destinationPixel,
+                image + sourcePixel,
+                4U);
+        }
     }
 
     ++presentation.frameRevision;
@@ -330,6 +353,10 @@ bool VdrSuiteHbbtvPresentationStore::Read(
     }
 
     message.frameRevision = presentation.frameRevision;
+    message.visibility =
+        presentation.visibleAlphaPixels == 0U
+            ? VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN
+            : VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE;
     message.observedAt = presentation.observedAt;
     message.renderWidth = presentation.renderWidth;
     message.renderHeight = presentation.renderHeight;

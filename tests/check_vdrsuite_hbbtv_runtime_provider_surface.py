@@ -50,6 +50,9 @@ for token in required_header:
 for token in (
     '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V1 "VdrWeb::HbbtvPresentation-v1"',
     'VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX 49152U',
+    'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN',
+    'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE',
+    'std::uint8_t visibility;',
 ):
     if token not in presentation_header:
         raise SystemExit(f'presentation header: missing token: {token}')

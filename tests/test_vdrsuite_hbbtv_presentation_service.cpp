@@ -58,6 +58,9 @@ int main()
     assert(VdrSuiteHbbtvPresentationStore::Read(meta));
     assert(meta.schemaVersion == VDRWEB_HBBTV_PRESENTATION_SCHEMA_V1);
     assert(meta.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(
+        meta.visibility ==
+        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
     assert(meta.frameRevision == 1);
     assert(meta.renderWidth == 2);
     assert(meta.renderHeight == 2);
@@ -115,12 +118,34 @@ int main()
         "session-overlay");
     assert(VdrSuiteHbbtvPresentationStore::Read(changed));
     assert(changed.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(
+        changed.visibility ==
+        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
     assert(changed.frameRevision == 2);
+
+    const std::uint8_t clearPatch[] = {
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+    };
+    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+        clearPatch, 2, 2, 0, 0, 2, 2));
+
+    auto hidden = request(
+        VDRWEB_HBBTV_PRESENTATION_META,
+        "session-overlay");
+    assert(VdrSuiteHbbtvPresentationStore::Read(hidden));
+    assert(hidden.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(
+        hidden.visibility ==
+        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN);
+    assert(hidden.frameRevision == 3);
 
     auto staleChunk = request(
         VDRWEB_HBBTV_PRESENTATION_CHUNK,
         "session-overlay",
-        1,
+        2,
         0);
     assert(VdrSuiteHbbtvPresentationStore::Read(staleChunk));
     assert(

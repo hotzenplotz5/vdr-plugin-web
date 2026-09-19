@@ -26,6 +26,12 @@ enum VdrWebHbbtvPresentationResultV1 : std::uint8_t {
     VDRWEB_HBBTV_PRESENTATION_RESULT_FRAME_TOO_LARGE = 7
 };
 
+enum VdrWebHbbtvPresentationVisibilityV1 : std::uint8_t {
+    VDRWEB_HBBTV_PRESENTATION_VISIBILITY_UNKNOWN = 0,
+    VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN = 1,
+    VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE = 2
+};
+
 struct VdrWebHbbtvPresentationV1 {
     std::uint32_t structSize;
 
@@ -39,7 +45,8 @@ struct VdrWebHbbtvPresentationV1 {
     // Response.
     std::uint32_t schemaVersion;
     std::uint8_t result;
-    std::uint8_t reservedResponse[3];
+    std::uint8_t visibility;
+    std::uint8_t reservedResponse[2];
     std::uint64_t observedAt;
     std::uint32_t renderWidth;
     std::uint32_t renderHeight;
