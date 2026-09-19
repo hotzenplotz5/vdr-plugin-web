@@ -24,6 +24,7 @@
 #include "videocontrol.h"
 #include "service/vdrsuite_hbbtv_discovery_service.h"
 #include "service/vdrsuite_hbbtv_runtime_service.h"
+#include "service/vdrsuite_hbbtv_presentation_service.h"
 #include "dummyosd.h"
 #include "debuglog.h"
 
@@ -580,6 +581,7 @@ bool cPluginWeb::Start() {
 void cPluginWeb::Stop() {
     thriftServer->stop();
 
+    VdrSuiteHbbtvPresentationStore::EndSession();
     vdrSuiteHbbtvRuntimeService.reset();
     clearVdrSuiteHbbtvUiCommand();
 
@@ -631,6 +633,11 @@ cOsdObject *cPluginWeb::MainMenuAction() {
             browserClient != nullptr &&
             browserClient->LoadUrl(VDRSUITE_HBBTV_BLANK_PAGE);
 
+        if (closed) {
+            VdrSuiteHbbtvPresentationStore::EndSession(
+                runtimeCommand.sessionId);
+        }
+
         if (vdrSuiteHbbtvRuntimeService != nullptr) {
             vdrSuiteHbbtvRuntimeService->CompleteClose(
                 runtimeCommand.sessionId,
@@ -662,8 +669,14 @@ cOsdObject *cPluginWeb::MainMenuAction() {
         if (!runtimeCommand.channelId.empty() &&
             currentChannelId == runtimeCommand.channelId &&
             browserClient != nullptr) {
+            VdrSuiteHbbtvPresentationStore::BeginSession(
+                runtimeCommand.sessionId);
             page = WebOSDPage::Create(useOutputDeviceScale, OSD);
             launched = browserClient->RedButton(runtimeCommand.channelId);
+            if (!launched) {
+                VdrSuiteHbbtvPresentationStore::EndSession(
+                    runtimeCommand.sessionId);
+            }
         }
         else {
             isyslog(
@@ -747,6 +760,15 @@ bool cPluginWeb::Service(const char *Id, void *Data = nullptr) {
 
         return vdrSuiteHbbtvRuntimeService->Handle(
             *static_cast<VdrWebHbbtvRuntimeV1 *>(Data));
+    }
+
+    if (Id != nullptr &&
+        strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0) {
+        if (Data == nullptr)
+            return false;
+
+        return VdrSuiteHbbtvPresentationStore::Read(
+            *static_cast<VdrWebHbbtvPresentationV1 *>(Data));
     }
 
     param_url = "";

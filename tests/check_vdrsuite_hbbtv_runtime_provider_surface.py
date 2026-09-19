@@ -7,9 +7,14 @@ web = (root / "web.cpp").read_text(encoding="utf-8")
 header = (root / "service" / "vdrsuite_hbbtv_runtime_service.h").read_text(
     encoding="utf-8"
 )
+presentation_header = (
+    root / "service" / "vdrsuite_hbbtv_presentation_service.h"
+).read_text(encoding="utf-8")
+osd = (root / "webosdpage.cpp").read_text(encoding="utf-8")
 
 required_web = (
     '#include "service/vdrsuite_hbbtv_runtime_service.h"',
+    '#include "service/vdrsuite_hbbtv_presentation_service.h"',
     'strcmp(Id, VDRWEB_SERVICE_HBBTV_RUNTIME_V1) == 0',
     'vdrSuiteHbbtvRuntimeService->Handle(',
     'VdrSuiteHbbtvUiCommandType::Launch',
@@ -19,6 +24,9 @@ required_web = (
     'browserClient->ProcessKey(key)',
     'vdrSuiteHbbtvRuntimeService->CompleteLaunch(',
     'vdrSuiteHbbtvRuntimeService->CompleteClose(',
+    'VdrSuiteHbbtvPresentationStore::BeginSession(',
+    'VdrSuiteHbbtvPresentationStore::EndSession(',
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0',
     '"http://localhost/internal/blank/page"',
 )
 
@@ -38,6 +46,20 @@ for token in required_web:
 for token in required_header:
     if token not in header:
         raise SystemExit(f'runtime header: missing token: {token}')
+
+for token in (
+    '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V1 "VdrWeb::HbbtvPresentation-v1"',
+    'VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX 49152U',
+):
+    if token not in presentation_header:
+        raise SystemExit(f'presentation header: missing token: {token}')
+
+for token in (
+    'VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(',
+    'drawImageQOI',
+):
+    if token not in osd:
+        raise SystemExit(f'presentation capture missing token: {token}')
 
 service_start = web.find('bool cPluginWeb::Service(')
 service_end = web.find('const char **cPluginWeb::SVDRPHelpPages()', service_start)
