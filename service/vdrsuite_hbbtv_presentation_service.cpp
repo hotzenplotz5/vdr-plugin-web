@@ -70,13 +70,14 @@ void resetResponse(
     response.operation = request.operation;
     response.frameRevision = request.frameRevision;
     response.offset = request.offset;
+    std::size_t sessionLength = 0;
+    while (sessionLength < VDRWEB_HBBTV_SESSION_ID_MAX &&
+           request.sessionId[sessionLength] != '\0') {
+        ++sessionLength;
+    }
     copyText(
         response.sessionId,
-        std::string(
-            request.sessionId,
-            strnlen(
-                request.sessionId,
-                VDRWEB_HBBTV_SESSION_ID_MAX)));
+        std::string(request.sessionId, sessionLength));
     response.schemaVersion = VDRWEB_HBBTV_PRESENTATION_SCHEMA_V1;
     response.result = VDRWEB_HBBTV_PRESENTATION_RESULT_INVALID_REQUEST;
 }
