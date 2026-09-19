@@ -72,6 +72,7 @@ APIVERSION = $(call PKGCFG,apiversion)
 ARCHIVE = $(PLUGIN)-$(VERSION)
 PACKAGE = vdr-$(ARCHIVE)
 VDRSUITE_HBBTV_DISCOVERY_TEST = /tmp/test_vdrsuite_hbbtv_discovery_service
+VDRSUITE_HBBTV_RUNTIME_TEST = /tmp/test_vdrsuite_hbbtv_runtime_service
 
 ### The name of the shared object file:
 
@@ -151,7 +152,7 @@ $(I18Npot): $(wildcard *.cpp)
 $(I18Nmsgs): $(DESTDIR)$(LOCDIR)/%/LC_MESSAGES/vdr-$(PLUGIN).mo: $(PODIR)/%.mo
 	install -D -m644 $< $@
 
-.PHONY: i18n test-vdrsuite-hbbtv-discovery
+.PHONY: i18n test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv
 i18n: $(I18Nmo) $(I18Npot)
 
 install-i18n: $(I18Nmsgs)
@@ -165,6 +166,15 @@ test-vdrsuite-hbbtv-discovery:
 		-pthread -o $(VDRSUITE_HBBTV_DISCOVERY_TEST)
 	$(VDRSUITE_HBBTV_DISCOVERY_TEST)
 	rm -f $(VDRSUITE_HBBTV_DISCOVERY_TEST)
+
+test-vdrsuite-hbbtv-runtime:
+	$(CXX) -std=c++17 -Wall -Wextra -pedantic -I. \
+		tests/test_vdrsuite_hbbtv_runtime_service.cpp \
+		-pthread -o $(VDRSUITE_HBBTV_RUNTIME_TEST)
+	$(VDRSUITE_HBBTV_RUNTIME_TEST)
+	rm -f $(VDRSUITE_HBBTV_RUNTIME_TEST)
+
+test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime
 
 $(SOFILE): $(OBJS)
 	@echo LD $@
@@ -191,4 +201,4 @@ dist: $(I18Npo) clean
 
 clean:
 	@-rm -f $(PODIR)/*.mo
-	@-rm -f $(OBJS) $(DEPFILE) $(VDRSUITE_HBBTV_DISCOVERY_TEST) *.so *.tgz core* *~
+	@-rm -f $(OBJS) $(DEPFILE) $(VDRSUITE_HBBTV_DISCOVERY_TEST) $(VDRSUITE_HBBTV_RUNTIME_TEST) *.so *.tgz core* *~
