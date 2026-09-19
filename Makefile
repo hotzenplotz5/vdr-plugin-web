@@ -152,7 +152,7 @@ $(I18Npot): $(wildcard *.cpp)
 $(I18Nmsgs): $(DESTDIR)$(LOCDIR)/%/LC_MESSAGES/vdr-$(PLUGIN).mo: $(PODIR)/%.mo
 	install -D -m644 $< $@
 
-.PHONY: i18n test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv
+.PHONY: i18n test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-provider-surface test-vdrsuite-hbbtv
 i18n: $(I18Nmo) $(I18Npot)
 
 install-i18n: $(I18Nmsgs)
@@ -174,7 +174,10 @@ test-vdrsuite-hbbtv-runtime:
 	$(VDRSUITE_HBBTV_RUNTIME_TEST)
 	rm -f $(VDRSUITE_HBBTV_RUNTIME_TEST)
 
-test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime
+test-vdrsuite-hbbtv-provider-surface:
+	python3 tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
+
+test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-provider-surface
 
 $(SOFILE): $(OBJS)
 	@echo LD $@

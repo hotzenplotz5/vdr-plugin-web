@@ -22,6 +22,7 @@
 #include "status.h"
 #include "videocontrol.h"
 #include "service/vdrsuite_hbbtv_discovery_service.h"
+#include "service/vdrsuite_hbbtv_runtime_service.h"
 #include "dummyosd.h"
 #include "debuglog.h"
 
@@ -51,6 +52,63 @@ VideoPlayer* videoPlayer = nullptr;
 std::string videoInfo;
 
 BrowserClient* browserClient;
+
+namespace
+{
+
+constexpr const char *VDRSUITE_HBBTV_BLANK_PAGE =
+    "http://localhost/internal/blank/page";
+
+enum class VdrSuiteHbbtvUiCommandType {
+    None,
+    Launch,
+    Close
+};
+
+struct VdrSuiteHbbtvUiCommand {
+    VdrSuiteHbbtvUiCommandType type = VdrSuiteHbbtvUiCommandType::None;
+    std::string sessionId;
+    std::string channelId;
+};
+
+std::mutex vdrSuiteHbbtvUiMutex;
+VdrSuiteHbbtvUiCommand vdrSuiteHbbtvUiCommand;
+std::unique_ptr<VdrSuiteHbbtvRuntimeService> vdrSuiteHbbtvRuntimeService;
+
+bool queueVdrSuiteHbbtvUiCommand(
+    VdrSuiteHbbtvUiCommandType type,
+    const std::string& sessionId,
+    const std::string& channelId = {})
+{
+    {
+        std::lock_guard<std::mutex> lock(vdrSuiteHbbtvUiMutex);
+        if (vdrSuiteHbbtvUiCommand.type != VdrSuiteHbbtvUiCommandType::None)
+            return false;
+
+        vdrSuiteHbbtvUiCommand.type = type;
+        vdrSuiteHbbtvUiCommand.sessionId = sessionId;
+        vdrSuiteHbbtvUiCommand.channelId = channelId;
+    }
+
+    cRemote::CallPlugin("web");
+    return true;
+}
+
+VdrSuiteHbbtvUiCommand takeVdrSuiteHbbtvUiCommand()
+{
+    std::lock_guard<std::mutex> lock(vdrSuiteHbbtvUiMutex);
+    VdrSuiteHbbtvUiCommand command = std::move(vdrSuiteHbbtvUiCommand);
+    vdrSuiteHbbtvUiCommand = {};
+    return command;
+}
+
+void clearVdrSuiteHbbtvUiCommand()
+{
+    std::lock_guard<std::mutex> lock(vdrSuiteHbbtvUiMutex);
+    vdrSuiteHbbtvUiCommand = {};
+}
+
+}
 
 enum OSD_COMMAND {
     // normal commands
@@ -490,6 +548,28 @@ bool cPluginWeb::Start() {
 
     browserClient = new BrowserClient(browserIp, browserPort);
 
+    VdrSuiteHbbtvRuntimeHooks runtimeHooks;
+    runtimeHooks.scheduleLaunch =
+        [](const std::string& sessionId, const std::string& channelId) {
+            return queueVdrSuiteHbbtvUiCommand(
+                VdrSuiteHbbtvUiCommandType::Launch,
+                sessionId,
+                channelId);
+        };
+    runtimeHooks.scheduleClose =
+        [](const std::string& sessionId) {
+            return queueVdrSuiteHbbtvUiCommand(
+                VdrSuiteHbbtvUiCommandType::Close,
+                sessionId);
+        };
+    runtimeHooks.sendInput =
+        [](const std::string&, const std::string& key) {
+            return browserClient != nullptr && browserClient->ProcessKey(key);
+        };
+    vdrSuiteHbbtvRuntimeService =
+        std::make_unique<VdrSuiteHbbtvRuntimeService>(
+            std::move(runtimeHooks));
+
     regularWorker = std::make_unique<cRegularWorker>();
     regularWorker->Start();
 
@@ -498,6 +578,9 @@ bool cPluginWeb::Start() {
 
 void cPluginWeb::Stop() {
     thriftServer->stop();
+
+    vdrSuiteHbbtvRuntimeService.reset();
+    clearVdrSuiteHbbtvUiCommand();
 
     delete browserClient;
     browserClient = nullptr;
@@ -538,6 +621,67 @@ time_t cPluginWeb::WakeupTime() {
 
 cOsdObject *cPluginWeb::MainMenuAction() {
     dsyslog("[vdrweb] MainMenuAction: command = %d\n", (int)nextOsdCommand);
+
+    const VdrSuiteHbbtvUiCommand runtimeCommand =
+        takeVdrSuiteHbbtvUiCommand();
+
+    if (runtimeCommand.type == VdrSuiteHbbtvUiCommandType::Close) {
+        const bool closed =
+            browserClient != nullptr &&
+            browserClient->LoadUrl(VDRSUITE_HBBTV_BLANK_PAGE);
+
+        if (vdrSuiteHbbtvRuntimeService != nullptr) {
+            vdrSuiteHbbtvRuntimeService->CompleteClose(
+                runtimeCommand.sessionId,
+                closed);
+        }
+
+        if (useDummyOsd)
+            return new cDummyOsdObject();
+        return nullptr;
+    }
+
+    if (runtimeCommand.type == VdrSuiteHbbtvUiCommandType::Launch) {
+        std::string currentChannelId;
+        {
+            LOCK_CHANNELS_READ
+            const cChannel *currentChannel =
+                Channels->GetByNumber(cDevice::CurrentChannel());
+            if (currentChannel != nullptr) {
+                const cString channelId =
+                    currentChannel->GetChannelID().ToString();
+                if (*channelId != nullptr)
+                    currentChannelId = *channelId;
+            }
+        }
+
+        bool launched = false;
+        WebOSDPage *page = nullptr;
+
+        if (!runtimeCommand.channelId.empty() &&
+            currentChannelId == runtimeCommand.channelId &&
+            browserClient != nullptr) {
+            page = WebOSDPage::Create(useOutputDeviceScale, OSD);
+            launched = browserClient->RedButton(runtimeCommand.channelId);
+        }
+        else {
+            isyslog(
+                "[vdrweb] Reject stale VDR-Suite HbbTV launch: requested=%s current=%s",
+                runtimeCommand.channelId.c_str(),
+                currentChannelId.c_str());
+        }
+
+        if (vdrSuiteHbbtvRuntimeService != nullptr) {
+            vdrSuiteHbbtvRuntimeService->CompleteLaunch(
+                runtimeCommand.sessionId,
+                launched);
+        }
+
+        if (!launched)
+            Skins.QueueMessage(mtInfo, tr("Browser not available"));
+
+        return page;
+    }
 
     if (nextOsdCommand == CLOSE) {
         nextOsdCommand = OPEN;
@@ -593,6 +737,15 @@ bool cPluginWeb::Service(const char *Id, void *Data = nullptr) {
 
         return VdrSuiteHbbtvDiscoveryStore::Read(
             *static_cast<VdrWebHbbtvDiscoveryV1 *>(Data));
+    }
+
+    if (Id != nullptr &&
+        strcmp(Id, VDRWEB_SERVICE_HBBTV_RUNTIME_V1) == 0) {
+        if (Data == nullptr || vdrSuiteHbbtvRuntimeService == nullptr)
+            return false;
+
+        return vdrSuiteHbbtvRuntimeService->Handle(
+            *static_cast<VdrWebHbbtvRuntimeV1 *>(Data));
     }
 
     param_url = "";
