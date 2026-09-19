@@ -74,6 +74,7 @@ PACKAGE = vdr-$(ARCHIVE)
 VDRSUITE_HBBTV_DISCOVERY_TEST = /tmp/test_vdrsuite_hbbtv_discovery_service
 VDRSUITE_HBBTV_RUNTIME_TEST = /tmp/test_vdrsuite_hbbtv_runtime_service
 VDRSUITE_HBBTV_PRESENTATION_TEST = /tmp/test_vdrsuite_hbbtv_presentation_service
+VDRSUITE_HBBTV_MEDIA_TEST = /tmp/test_vdrsuite_hbbtv_media_service
 
 ### The name of the shared object file:
 
@@ -100,7 +101,7 @@ DEFINES += -DPLUGIN_NAME_I18N='"$(PLUGIN)"' $(CONFIG)
 
 ### The object files (add further files here):
 
-OBJS = $(PLUGIN).o webosdpage.o qoi_impl.o service/vdrsuite_hbbtv_presentation_service.o status.o ait.o videocontrol.o backtrace.o \
+OBJS = $(PLUGIN).o webosdpage.o qoi_impl.o service/vdrsuite_hbbtv_presentation_service.o service/vdrsuite_hbbtv_media_service.o status.o ait.o videocontrol.o backtrace.o \
 	   thrift-services/src-gen/CommonService.o thrift-services/src-gen/common_types.o \
 	   thrift-services/src-gen/VdrPluginWeb.o thrift-services/src-gen/pluginweb_types.o \
 	   thrift-services/src-gen/CefBrowser.o thrift-services/src-gen/cefbrowser_types.o \
@@ -153,7 +154,7 @@ $(I18Npot): $(wildcard *.cpp)
 $(I18Nmsgs): $(DESTDIR)$(LOCDIR)/%/LC_MESSAGES/vdr-$(PLUGIN).mo: $(PODIR)/%.mo
 	install -D -m644 $< $@
 
-.PHONY: i18n test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-provider-surface test-vdrsuite-hbbtv
+.PHONY: i18n test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface test-vdrsuite-hbbtv
 i18n: $(I18Nmo) $(I18Npot)
 
 install-i18n: $(I18Nmsgs)
@@ -183,10 +184,18 @@ test-vdrsuite-hbbtv-presentation:
 	$(VDRSUITE_HBBTV_PRESENTATION_TEST)
 	rm -f $(VDRSUITE_HBBTV_PRESENTATION_TEST)
 
+test-vdrsuite-hbbtv-media:
+	$(CXX) -std=c++17 -Wall -Wextra -pedantic -I. \
+		tests/test_vdrsuite_hbbtv_media_service.cpp \
+		service/vdrsuite_hbbtv_media_service.cpp \
+		-pthread -o $(VDRSUITE_HBBTV_MEDIA_TEST)
+	$(VDRSUITE_HBBTV_MEDIA_TEST)
+	rm -f $(VDRSUITE_HBBTV_MEDIA_TEST)
+
 test-vdrsuite-hbbtv-provider-surface:
 	python3 tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
 
-test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-provider-surface
+test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface
 
 $(SOFILE): $(OBJS)
 	@echo LD $@
@@ -213,4 +222,4 @@ dist: $(I18Npo) clean
 
 clean:
 	@-rm -f $(PODIR)/*.mo
-	@-rm -f $(OBJS) $(DEPFILE) $(VDRSUITE_HBBTV_DISCOVERY_TEST) $(VDRSUITE_HBBTV_RUNTIME_TEST) $(VDRSUITE_HBBTV_PRESENTATION_TEST) *.so *.tgz core* *~
+	@-rm -f $(OBJS) $(DEPFILE) $(VDRSUITE_HBBTV_DISCOVERY_TEST) $(VDRSUITE_HBBTV_RUNTIME_TEST) $(VDRSUITE_HBBTV_PRESENTATION_TEST) $(VDRSUITE_HBBTV_MEDIA_TEST) *.so *.tgz core* *~

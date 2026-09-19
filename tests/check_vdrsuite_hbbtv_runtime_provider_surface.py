@@ -10,11 +10,15 @@ header = (root / "service" / "vdrsuite_hbbtv_runtime_service.h").read_text(
 presentation_header = (
     root / "service" / "vdrsuite_hbbtv_presentation_service.h"
 ).read_text(encoding="utf-8")
+media_header = (
+    root / "service" / "vdrsuite_hbbtv_media_service.h"
+).read_text(encoding="utf-8")
 osd = (root / "webosdpage.cpp").read_text(encoding="utf-8")
 
 required_web = (
     '#include "service/vdrsuite_hbbtv_runtime_service.h"',
     '#include "service/vdrsuite_hbbtv_presentation_service.h"',
+    '#include "service/vdrsuite_hbbtv_media_service.h"',
     'strcmp(Id, VDRWEB_SERVICE_HBBTV_RUNTIME_V1) == 0',
     'vdrSuiteHbbtvRuntimeService->Handle(',
     'VdrSuiteHbbtvUiCommandType::Launch',
@@ -29,6 +33,12 @@ required_web = (
     'VdrSuiteHbbtvPresentationStore::BeginSession(',
     'VdrSuiteHbbtvPresentationStore::EndSession(',
     'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0',
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_MEDIA_V1) == 0',
+    'VdrSuiteHbbtvMediaStore::BeginSession(',
+    'VdrSuiteHbbtvMediaStore::BeginVideo(',
+    'VdrSuiteHbbtvMediaStore::AppendTs(',
+    'VdrSuiteHbbtvMediaStore::StopVideo(',
+    'VdrSuiteHbbtvMediaStore::EndSession(',
     '"http://localhost/internal/blank/page"',
 )
 
@@ -59,6 +69,16 @@ for token in (
 ):
     if token not in presentation_header:
         raise SystemExit(f'presentation header: missing token: {token}')
+
+for token in (
+    '#define VDRWEB_SERVICE_HBBTV_MEDIA_V1 "VdrWeb::HbbtvMedia-v1"',
+    'VDRWEB_HBBTV_MEDIA_STATE_STREAMING',
+    'VDRWEB_HBBTV_MEDIA_STATE_PAUSED',
+    'std::uint64_t mediaRevision;',
+    'char socketPath[VDRWEB_HBBTV_MEDIA_SOCKET_PATH_MAX];',
+):
+    if token not in media_header:
+        raise SystemExit(f'media header: missing token: {token}')
 
 for token in (
     'VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(',
