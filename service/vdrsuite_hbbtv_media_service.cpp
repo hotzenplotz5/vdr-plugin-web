@@ -39,8 +39,9 @@ public:
         if (!source->prepare(root, revision))
             return {};
         try {
-            source->writer_ = std::thread([source]() {
-                source->writerLoop();
+            MediaSocketSource* const rawSource = source.get();
+            source->writer_ = std::thread([rawSource]() {
+                rawSource->writerLoop();
             });
         }
         catch (...) {
