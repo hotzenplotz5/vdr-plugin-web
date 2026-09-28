@@ -1,0 +1,34 @@
+name: VDR-Suite HbbTV provider
+
+on:
+  pull_request:
+    paths:
+      - "tools/apply_cefbrowser_zdf_controls_fix.py"
+      - "tools/install_cefbrowser_zdf_controls_fix.sh"
+      - "tests/test_cefbrowser_zdf_static_override.py"
+      - "docs/vdrsuite-cefbrowser-zdf-static-override.md"
+      - "Makefile"
+      - ".github/workflows/vdrsuite-hbbtv-provider.yml"
+  push:
+    branches:
+      - "fix/zdf-hbbtv-controls-input-static"
+    paths:
+      - "tools/apply_cefbrowser_zdf_controls_fix.py"
+      - "tools/install_cefbrowser_zdf_controls_fix.sh"
+      - "tests/test_cefbrowser_zdf_static_override.py"
+      - "docs/vdrsuite-cefbrowser-zdf-static-override.md"
+      - "Makefile"
+      - ".github/workflows/vdrsuite-hbbtv-provider.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zdf-static-override:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ZDF controls/input static override
+        run: make test-vdrsuite-cefbrowser-zdf-static
