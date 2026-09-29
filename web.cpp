@@ -195,6 +195,19 @@ void VdrPluginWebServer::ping() {
 bool VdrPluginWebServer::ProcessOsdUpdate(const ProcessOsdUpdateType &input) {
     DEBUGLOG("[vdrweb] VdrPluginWebServer::ProcessOsdUpdate");
 
+    if (vdrSuiteHbbtvRuntimeService != nullptr &&
+        vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive()) {
+        const std::uint64_t expected =
+            std::uint64_t(input.width > 0 ? input.width : 0) *
+            std::uint64_t(input.height > 0 ? input.height : 0) * 4U;
+        if (expected != input.data.size())
+            throw createException(400, "invalid HbbTV pixel buffer size");
+        return VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+            reinterpret_cast<const std::uint8_t *>(input.data.data()),
+            input.disp_width, input.disp_height, input.x, input.y,
+            input.width, input.height);
+    }
+
     WebOSDPage* page = WebOSDPage::Get();
     if (page == nullptr) {
         // illegal request -> abort
@@ -211,6 +224,13 @@ bool VdrPluginWebServer::ProcessOsdUpdate(const ProcessOsdUpdateType &input) {
 
 bool VdrPluginWebServer::ProcessOsdUpdateQOI(const ProcessOsdUpdateQOIType &input) {
     DEBUGLOG("[vdrweb] VdrPluginWebServer::ProcessOsdUpdateQOI");
+
+    if (vdrSuiteHbbtvRuntimeService != nullptr &&
+        vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive()) {
+        return VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(
+            input.image_data, input.render_width, input.render_height,
+            input.x, input.y);
+    }
 
     WebOSDPage* page = WebOSDPage::Get();
     if (page == nullptr) {
@@ -264,6 +284,18 @@ bool VdrPluginWebServer::StartVideo(const StartVideoType &input) {
 
     if (!VdrSuiteHbbtvMediaStore::BeginVideo(input.videoInfo)) {
         dsyslog("[vdrweb] VDR-Suite HbbTV media source unavailable");
+    }
+
+    // The Suite consumes TS and browser pixels directly. Launching a local
+    // cControl here tears down the OSD and makes CEF's watchdog blank the page.
+    if (vdrSuiteHbbtvRuntimeService != nullptr &&
+        vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive()) {
+        if (saveTS) {
+            createTSFileName();
+            if (!MakeDirs(currentTSDir, true))
+                return false;
+        }
+        return true;
     }
 
     WebOSDPage* page;
@@ -414,6 +446,9 @@ bool VdrPluginWebServer::SelectAudioTrack(const SelectAudioTrackType &input) {
 }
 
 bool VdrPluginWebServer::IsWebActive() {
+    if (vdrSuiteHbbtvRuntimeService != nullptr &&
+        vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive())
+        return true;
     return (WebOSDPage::Get() != nullptr) || (videoPlayer != nullptr);
 }
 

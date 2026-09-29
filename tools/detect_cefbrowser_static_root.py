@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import posixpath
+import shlex
 import sys
 
 
@@ -42,6 +43,10 @@ def detect(proc=Path("/proc")):
             argv.pop()
         if not argv or not argv[0]:
             raise ValueError("empty cefbrowser command line")
+        # CEF rewrites /proc/cmdline as one space-separated process title.
+        # Normal NUL-separated argv must retain spaces inside argument values.
+        if len(argv) == 1 and " " in argv[0]:
+            argv = shlex.split(argv[0])
         if any(arg == "--type" or arg.startswith("--type=") for arg in argv[1:]):
             continue
         status = (entry / "status").read_text()

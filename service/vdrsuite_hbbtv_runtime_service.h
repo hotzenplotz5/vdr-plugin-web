@@ -110,6 +110,16 @@ public:
     {
     }
 
+    // Browser lifetime belongs to the remote session, not a local VDR OSD/player.
+    bool KeepsBrowserAlive()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return active_.owned &&
+            (active_.state == VDRWEB_HBBTV_RUNTIME_STATE_STARTING ||
+             active_.state == VDRWEB_HBBTV_RUNTIME_STATE_ACTIVE ||
+             active_.state == VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
+    }
+
     bool Handle(VdrWebHbbtvRuntimeV1& message)
     {
         const VdrWebHbbtvRuntimeV1 request = message;

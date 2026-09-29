@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -204,5 +205,25 @@ int main()
         ended.result ==
         VDRWEB_HBBTV_PRESENTATION_RESULT_NO_SESSION);
 
+    // Browser QOI updates must reach the Suite with no local WebOSDPage.
+    VdrSuiteHbbtvPresentationStore::BeginSession("remote-video");
+    const unsigned char pixel[] = {0x11, 0x22, 0x33, 0xff};
+    qoi_desc desc{};
+    desc.width = desc.height = 1;
+    desc.channels = 4;
+    int encodedSize = 0;
+    void* remoteEncoded = qoi_encode(pixel, &desc, &encodedSize);
+    assert(remoteEncoded != nullptr);
+    std::string patch(static_cast<const char*>(remoteEncoded), encodedSize);
+    std::free(remoteEncoded);
+    assert(VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(patch, 2, 2, 1, 1));
+    auto remoteFrame = request(VDRWEB_HBBTV_PRESENTATION_META, "remote-video");
+    assert(VdrSuiteHbbtvPresentationStore::Read(remoteFrame));
+    assert(remoteFrame.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(remoteFrame.visibility == VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
+    assert(!VdrSuiteHbbtvPresentationStore::ApplyQoiPatch("invalid", 2, 2, 0, 0));
+    patch[4] = 0x7f;
+    assert(!VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(patch, 2, 2, 0, 0));
+    VdrSuiteHbbtvPresentationStore::EndSession("remote-video");
     return 0;
 }

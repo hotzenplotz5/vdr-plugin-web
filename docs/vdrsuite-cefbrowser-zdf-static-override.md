@@ -1,5 +1,25 @@
 # ZDF HbbTV controls/input static override
 
+## Live ARD failure found on 2026-09-29
+
+The live session had already navigated to `http://localhost/internal/blank/page`
+while the external ARD video continued. PAUSE/STOP produced
+`window.cefKeyPress is not a function`. The provider log showed local OSD/player
+destruction at video start. cefbrowser's `checkVdrRegular()` navigates to the
+blank page whenever the provider's `IsWebActive()` reports false.
+
+The provider now keeps the browser alive for owned starting/active/closing Suite
+sessions, captures raw/QOI browser frames directly into the presentation store,
+and bypasses local player/OSD replacement for Suite video starts. Legacy local
+playback retains its existing path. This part requires a rebuilt VDR plugin;
+the static installer alone cannot repair an already blank browser session.
+No service restart is performed by the installer. Real-device acceptance of
+controls and media effects remains required after loading the rebuilt plugin.
+
+The real CEF process also rewrites `/proc/PID/cmdline` into one space-separated
+process title. Detection handles that form as well as normal NUL-separated argv;
+the real PID 1946 resolves to `/var/lib/hbbtv/cefbrowser`.
+
 This directory documents the VDR-Suite runtime correction for the cefbrowser
 static-content boundary used by `vdr-plugin-web`.
 

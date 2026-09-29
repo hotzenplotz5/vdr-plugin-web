@@ -112,6 +112,7 @@ int main()
         };
 
     VdrSuiteHbbtvRuntimeService runtime(hooks);
+    assert(!runtime.KeepsBrowserAlive());
 
     auto launch = makeRequest(
         VDRWEB_HBBTV_RUNTIME_LAUNCH,
@@ -124,6 +125,7 @@ int main()
     assert(launch.schemaVersion == VDRWEB_HBBTV_RUNTIME_SCHEMA_V1);
     assert(launch.result == VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
     assert(launch.state == VDRWEB_HBBTV_RUNTIME_STATE_STARTING);
+    assert(runtime.KeepsBrowserAlive());
     assert(launchCount == 1);
     assert(launchedSession == "session-a");
     assert(launchedChannel == channel);
@@ -145,6 +147,8 @@ int main()
     assert(launchCount == 1);
 
     assert(runtime.CompleteLaunch("session-a", true));
+    // A remote session remains active with no local OSD or cControl/player.
+    assert(runtime.KeepsBrowserAlive());
 
     auto status = makeRequest(
         VDRWEB_HBBTV_RUNTIME_STATUS,
@@ -249,6 +253,7 @@ int main()
     assert(runtime.Handle(close));
     assert(close.result == VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
     assert(close.state == VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
+    assert(runtime.KeepsBrowserAlive());
     assert(closeCount == 1);
     assert(closedSession == "session-a");
 
@@ -276,6 +281,7 @@ int main()
         closedStatus.result ==
         VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE);
     assert(closedStatus.state == VDRWEB_HBBTV_RUNTIME_STATE_NONE);
+    assert(!runtime.KeepsBrowserAlive());
 
     auto afterClose = makeRequest(
         VDRWEB_HBBTV_RUNTIME_INPUT,

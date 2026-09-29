@@ -11,6 +11,31 @@
 #include <string>
 #include <vector>
 
+bool VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(
+    const std::string& encoded, int renderWidth, int renderHeight, int x, int y)
+{
+    if (encoded.size() < 22U || encoded.size() > 16U * 1024U * 1024U)
+        return false;
+    const auto dimension = [&](std::size_t offset) {
+        std::uint32_t value = 0;
+        for (std::size_t i = offset; i < offset + 4; ++i)
+            value = (value << 8U) | static_cast<unsigned char>(encoded[i]);
+        return value;
+    };
+    if (dimension(4) == 0 || dimension(4) > 3840U ||
+        dimension(8) == 0 || dimension(8) > 2160U)
+        return false;
+    qoi_desc desc{};
+    void* pixels = qoi_decode(encoded.data(), static_cast<int>(encoded.size()), &desc, 4);
+    if (pixels == nullptr)
+        return false;
+    const bool applied = ApplyBgraPatch(
+        static_cast<const std::uint8_t*>(pixels), renderWidth, renderHeight,
+        x, y, static_cast<int>(desc.width), static_cast<int>(desc.height));
+    std::free(pixels);
+    return applied;
+}
+
 namespace
 {
 

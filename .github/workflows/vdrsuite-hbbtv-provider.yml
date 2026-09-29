@@ -3,6 +3,9 @@ name: VDR-Suite HbbTV provider
 on:
   pull_request:
     paths:
+      - "web.cpp"
+      - "service/**"
+      - "tests/**"
       - "tools/detect_cefbrowser_static_root.py"
       - "tests/test_cefbrowser_process_detection.py"
       - "tools/apply_cefbrowser_zdf_controls_fix.py"
@@ -15,6 +18,9 @@ on:
     branches:
       - "fix/zdf-hbbtv-controls-input-static"
     paths:
+      - "web.cpp"
+      - "service/**"
+      - "tests/**"
       - "tools/detect_cefbrowser_static_root.py"
       - "tests/test_cefbrowser_process_detection.py"
       - "tools/apply_cefbrowser_zdf_controls_fix.py"
@@ -35,4 +41,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate ZDF controls/input static override
-        run: make test-vdrsuite-cefbrowser-zdf-static
+        run: make test-vdrsuite-hbbtv

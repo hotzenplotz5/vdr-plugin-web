@@ -78,4 +78,7 @@ public:
         int height);
 
     static bool Read(VdrWebHbbtvPresentationV1& message);
+
+    static bool ApplyQoiPatch(const std::string& encoded,
+        int renderWidth, int renderHeight, int x, int y);
 };

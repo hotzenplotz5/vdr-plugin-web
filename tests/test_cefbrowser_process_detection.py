@@ -55,6 +55,17 @@ class DetectionTests(unittest.TestCase):
             self.assertEqual(detector.static_argument(["cef", option + "/static path"]),
                              "/static path")
 
+    def test_cef_rewritten_process_title(self):
+        entry = self.process(1946, 1)
+        (entry / "cmdline").write_bytes(
+            b"/opt/hbbtv/cefbrowser/cefbrowser --config=/etc/hbbtv/sockets.ini "
+            b"--staticpath=/var/lib/hbbtv/cefbrowser --disable-gpu\0")
+        child = self.process(2216, 1)
+        (child / "cmdline").write_bytes(
+            b"/opt/hbbtv/cefbrowser/cefbrowser --type=gpu-process\0")
+        self.assertEqual(detector.detect(self.proc),
+                         (1946, Path("/var/lib/hbbtv/cefbrowser")))
+
     def test_invalid_options_do_not_fall_back(self):
         for args in [["-s"], ["--staticpath="], ["--staticPath", "--disable-gpu"],
                      ["-s", "/one", "--staticpath=/two"]]:
