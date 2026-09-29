@@ -66,13 +66,14 @@ constexpr const char *VDRSUITE_HBBTV_BLANK_PAGE =
 enum class VdrSuiteHbbtvUiCommandType {
     None,
     Launch,
-    FinalizeClose
-};
+    FinalizeClose,
+    ResetPlayer};
 
 struct VdrSuiteHbbtvUiCommand {
     VdrSuiteHbbtvUiCommandType type = VdrSuiteHbbtvUiCommandType::None;
     std::string sessionId;
     std::string channelId;
+    std::string videoInfo;
 };
 
 std::mutex vdrSuiteHbbtvUiMutex;
@@ -82,7 +83,8 @@ std::unique_ptr<VdrSuiteHbbtvRuntimeService> vdrSuiteHbbtvRuntimeService;
 bool queueVdrSuiteHbbtvUiCommand(
     VdrSuiteHbbtvUiCommandType type,
     const std::string& sessionId,
-    const std::string& channelId = {})
+    const std::string& channelId = {},
+    const std::string& queuedVideoInfo = {})
 {
     {
         std::lock_guard<std::mutex> lock(vdrSuiteHbbtvUiMutex);
@@ -92,6 +94,7 @@ bool queueVdrSuiteHbbtvUiCommand(
         vdrSuiteHbbtvUiCommand.type = type;
         vdrSuiteHbbtvUiCommand.sessionId = sessionId;
         vdrSuiteHbbtvUiCommand.channelId = channelId;
+        vdrSuiteHbbtvUiCommand.videoInfo = queuedVideoInfo;
     }
 
     cRemote::CallPlugin("web");
@@ -388,48 +391,36 @@ bool VdrPluginWebServer::VideoFullscreen() {
 }
 
 bool VdrPluginWebServer::ResetVideo(const ResetVideoType &input) {
-    dsyslog("[vdrweb] ResetVideo received: Coords x=%d, y=%d, w=%d, h=%d", lastVideoX, lastVideoY, lastVideoWidth, lastVideoHeight);
+    dsyslog(
+        "[vdrweb] ResetVideo received: Coords x=%d, y=%d, w=%d, h=%d",
+        lastVideoX,
+        lastVideoY,
+        lastVideoWidth,
+        lastVideoHeight);
 
     if (!VdrSuiteHbbtvMediaStore::ResetVideo(input.videoInfo)) {
         dsyslog("[vdrweb] VDR-Suite HbbTV media reset unavailable");
     }
 
     if (saveTS) {
-        // create directory if necessary
         createTSFileName();
         if (!MakeDirs(currentTSDir, true)) {
-            esyslog("[vdrweb]: can't create directory %s", currentTSDir);
+            esyslog(
+                "[vdrweb]: can't create directory %s",
+                currentTSDir);
         }
     }
 
-    if (videoPlayer != nullptr) {
-        // TODO: Compare saved videoInfo with new value to determine
-        //   if DeviceClear is sufficient or a complete reset is necessary
-
-        dsyslog("[vdrweb] video change from %s to %s", videoInfo.c_str(), input.videoInfo.c_str());
-
-        if (videoInfo != input.videoInfo) {
-            dsyslog("[vdrweb] Device res requested, because of a video format change");
-            // videoPlayer->ResetVideo();
-            cControl::Shutdown();
-
-            WebOSDPage* page = WebOSDPage::Create(useOutputDeviceScale, PLAYER);
-            page->Display();
-            videoPlayer = new VideoPlayer();
-            cControl::Launch(page);
-            page->SetPlayer(videoPlayer);
-        } else {
-            dsyslog("[vdrweb] Device reset is sufficent, because video format does not change");
-            videoPlayer->ResetVideo();
-        }
-
-        VideoPlayer::SetVideoSize(lastVideoX, lastVideoY, lastVideoWidth, lastVideoHeight);
-    } else {
-        // TODO: Is it necessary to create a new Player?
-        esyslog("[vdrweb] ResetVideo called, but videoPlayer is null");
+    if (!queueVdrSuiteHbbtvUiCommand(
+            VdrSuiteHbbtvUiCommandType::ResetPlayer,
+            {},
+            {},
+            input.videoInfo))
+    {
+        dsyslog(
+            "[vdrweb] VDR-Suite HbbTV player reset queue busy; "
+            "native player reset skipped");
     }
-
-    videoInfo = input.videoInfo;
 
     return true;
 }
@@ -646,14 +637,16 @@ bool cPluginWeb::Start() {
                     monotonicMilliseconds());
 
             if (confirmation ==
-                VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed)
+                VdrSuiteHbbtvRuntimeCloseConfirmation::Pending)
             {
-                if (!queueVdrSuiteHbbtvUiCommand(
-                        VdrSuiteHbbtvUiCommandType::FinalizeClose,
-                        sessionId))
-                {
-                    return VdrSuiteHbbtvRuntimeCloseConfirmation::Failed;
-                }
+                return confirmation;
+            }
+
+            if (!queueVdrSuiteHbbtvUiCommand(
+                    VdrSuiteHbbtvUiCommandType::FinalizeClose,
+                    sessionId))
+            {
+                return VdrSuiteHbbtvRuntimeCloseConfirmation::Pending;
             }
 
             return confirmation;
@@ -732,6 +725,54 @@ cOsdObject *cPluginWeb::MainMenuAction() {
 
         if (useDummyOsd)
             return new cDummyOsdObject();
+        return nullptr;
+    }
+
+    if (runtimeCommand.type ==
+        VdrSuiteHbbtvUiCommandType::ResetPlayer) {
+        if (videoPlayer != nullptr) {
+            dsyslog(
+                "[vdrweb] Main-thread video change from %s to %s",
+                videoInfo.c_str(),
+                runtimeCommand.videoInfo.c_str());
+
+            if (videoInfo != runtimeCommand.videoInfo) {
+                dsyslog(
+                    "[vdrweb] Main-thread player rebuild because "
+                    "video format changed");
+
+                cControl::Shutdown();
+
+                WebOSDPage* page =
+                    WebOSDPage::Create(
+                        useOutputDeviceScale,
+                        PLAYER);
+                page->Display();
+
+                videoPlayer = new VideoPlayer();
+                cControl::Launch(page);
+                page->SetPlayer(videoPlayer);
+            }
+            else {
+                dsyslog(
+                    "[vdrweb] Main-thread player reset because "
+                    "video format did not change");
+                videoPlayer->ResetVideo();
+            }
+
+            VideoPlayer::SetVideoSize(
+                lastVideoX,
+                lastVideoY,
+                lastVideoWidth,
+                lastVideoHeight);
+        }
+        else {
+            esyslog(
+                "[vdrweb] Main-thread ResetVideo called, "
+                "but videoPlayer is null");
+        }
+
+        videoInfo = runtimeCommand.videoInfo;
         return nullptr;
     }
 

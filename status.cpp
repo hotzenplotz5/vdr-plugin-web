@@ -83,7 +83,9 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
          device = nullptr;
          aitFilter = nullptr;
          sid = -1;
-         VdrSuiteHbbtvDiscoveryStore::EndChannel();
+         // ChannelNumber == 0 is VDR's pre-switch notification.
+         // Keep the current HbbTV discovery until the concrete
+         // target channel is known below.
       }
 
       if (channelNumber) {

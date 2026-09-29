@@ -23,6 +23,7 @@ required_web = (
     'vdrSuiteHbbtvRuntimeService->Handle(',
     'VdrSuiteHbbtvUiCommandType::Launch',
     'VdrSuiteHbbtvUiCommandType::FinalizeClose',
+    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
     'browserClient->RedButton(runtimeCommand.channelId)',
     'browserClient->LoadUrl(VDRSUITE_HBBTV_BLANK_PAGE)',
     'VdrSuiteHbbtvPresentationStore::BeginClose(',
@@ -91,6 +92,61 @@ service_start = web.find('bool cPluginWeb::Service(')
 service_end = web.find('const char **cPluginWeb::SVDRPHelpPages()', service_start)
 if service_start < 0 or service_end < 0:
     raise SystemExit('unable to locate plugin Service/SVDRP boundary')
+
+reset_start = web.find(
+    'bool VdrPluginWebServer::ResetVideo(const ResetVideoType &input)'
+)
+reset_end = web.find(
+    'bool VdrPluginWebServer::SelectAudioTrack',
+    reset_start
+)
+if reset_start < 0 or reset_end < 0:
+    raise SystemExit('unable to locate ResetVideo boundary')
+
+reset_body = web[reset_start:reset_end]
+
+for required in (
+    'VdrSuiteHbbtvMediaStore::ResetVideo(input.videoInfo)',
+    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
+    'queueVdrSuiteHbbtvUiCommand(',
+):
+    if required not in reset_body:
+        raise SystemExit(
+            f'ResetVideo worker missing queued reset contract: {required}'
+        )
+
+for forbidden in (
+    'cControl::Shutdown()',
+    'cControl::Launch(',
+    'WebOSDPage::Create(',
+    'videoPlayer->ResetVideo()',
+    'VideoPlayer::SetVideoSize(',
+):
+    if forbidden in reset_body:
+        raise SystemExit(
+            f'ResetVideo worker owns VDR player lifecycle: {forbidden}'
+        )
+
+main_start = web.find(
+    'cOsdObject *cPluginWeb::MainMenuAction()'
+)
+if main_start < 0:
+    raise SystemExit('MainMenuAction boundary missing')
+
+main_body = web[main_start:]
+
+for required in (
+    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
+    'cControl::Shutdown()',
+    'WebOSDPage::Create(',
+    'cControl::Launch(',
+    'videoPlayer->ResetVideo()',
+    'VideoPlayer::SetVideoSize(',
+):
+    if required not in main_body:
+        raise SystemExit(
+            f'MainMenuAction reset ownership missing: {required}'
+        )
 
 service_body = web[service_start:service_end]
 runtime_block_start = service_body.find(

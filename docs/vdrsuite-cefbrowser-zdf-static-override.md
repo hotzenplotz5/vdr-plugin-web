@@ -13,8 +13,11 @@ sessions, captures raw/QOI browser frames directly into the presentation store,
 and bypasses local player/OSD replacement for Suite video starts. Legacy local
 playback retains its existing path. This part requires a rebuilt VDR plugin;
 the static installer alone cannot repair an already blank browser session.
-No service restart is performed by the installer. Real-device acceptance of
-controls and media effects remains required after loading the rebuilt plugin.
+No service restart is performed by the static installer. After installing the
+rebuilt plugin and restarting VDR, the user confirmed visible controls and
+working PAUSE, OK and STOP on 2026-09-29. The repository also includes the local
+corrections present in that accepted build: same-channel discovery continuity,
+release of failed/closed runtime ownership, and main-thread player resets.
 
 The real CEF process also rewrites `/proc/PID/cmdline` into one space-separated
 process title. Detection handles that form as well as normal NUL-separated argv;

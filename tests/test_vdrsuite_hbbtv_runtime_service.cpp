@@ -323,6 +323,140 @@ int main()
         VDRWEB_HBBTV_RUNTIME_RESULT_APPLICATION_NOT_LAUNCHABLE);
     assert(launchCount == 1);
 
+    {
+        int recoveryLaunchCount = 0;
+        int recoveryCloseCount = 0;
+        VdrSuiteHbbtvRuntimeCloseConfirmation
+            recoveryCloseConfirmation =
+                VdrSuiteHbbtvRuntimeCloseConfirmation::Pending;
+
+        VdrSuiteHbbtvRuntimeHooks recoveryHooks;
+        recoveryHooks.scheduleLaunch =
+            [&](const std::string&, const std::string&) {
+                ++recoveryLaunchCount;
+                return true;
+            };
+        recoveryHooks.scheduleClose =
+            [&](const std::string& sessionId) {
+                ++recoveryCloseCount;
+                assert(sessionId == "session-timeout");
+                return true;
+            };
+        recoveryHooks.closeConfirmation =
+            [&](const std::string& sessionId) {
+                assert(sessionId == "session-timeout");
+                return recoveryCloseConfirmation;
+            };
+
+        VdrSuiteHbbtvRuntimeService recoveryRuntime(
+            recoveryHooks);
+
+        auto recoveryLaunch = makeRequest(
+            VDRWEB_HBBTV_RUNTIME_LAUNCH,
+            "session-timeout",
+            channel,
+            1,
+            newerRevision);
+
+        assert(recoveryRuntime.Handle(recoveryLaunch));
+        assert(
+            recoveryLaunch.result ==
+            VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
+        assert(recoveryLaunchCount == 1);
+        assert(
+            recoveryRuntime.CompleteLaunch(
+                "session-timeout",
+                true));
+
+        auto recoveryClose = makeRequest(
+            VDRWEB_HBBTV_RUNTIME_CLOSE,
+            "session-timeout",
+            channel,
+            1,
+            newerRevision);
+
+        assert(recoveryRuntime.Handle(recoveryClose));
+        assert(
+            recoveryClose.result ==
+            VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
+        assert(
+            recoveryClose.state ==
+            VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
+        assert(recoveryCloseCount == 1);
+
+        auto pendingReplacement = makeRequest(
+            VDRWEB_HBBTV_RUNTIME_LAUNCH,
+            "session-after-timeout",
+            channel,
+            1,
+            newerRevision);
+
+        assert(recoveryRuntime.Handle(pendingReplacement));
+        assert(
+            pendingReplacement.result ==
+            VDRWEB_HBBTV_RUNTIME_RESULT_BUSY);
+        assert(recoveryLaunchCount == 1);
+
+        recoveryCloseConfirmation =
+            VdrSuiteHbbtvRuntimeCloseConfirmation::Failed;
+
+        auto recoveredReplacement = makeRequest(
+            VDRWEB_HBBTV_RUNTIME_LAUNCH,
+            "session-after-timeout",
+            channel,
+            1,
+            newerRevision);
+
+        assert(recoveryRuntime.Handle(recoveredReplacement));
+        assert(
+            recoveredReplacement.result ==
+            VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
+        assert(
+            recoveredReplacement.state ==
+            VDRWEB_HBBTV_RUNTIME_STATE_STARTING);
+        assert(recoveryLaunchCount == 2);
+    }
+
+    {
+        int failedLaunchCount = 0;
+
+        VdrSuiteHbbtvRuntimeHooks failedLaunchHooks;
+        failedLaunchHooks.scheduleLaunch =
+            [&](const std::string&, const std::string&) {
+                ++failedLaunchCount;
+                return false;
+            };
+
+        VdrSuiteHbbtvRuntimeService failedLaunchRuntime(
+            failedLaunchHooks);
+
+        auto firstFailedLaunch = makeRequest(
+            VDRWEB_HBBTV_RUNTIME_LAUNCH,
+            "session-launch-failure-a",
+            channel,
+            1,
+            newerRevision);
+
+        assert(failedLaunchRuntime.Handle(firstFailedLaunch));
+        assert(
+            firstFailedLaunch.result ==
+            VDRWEB_HBBTV_RUNTIME_RESULT_RUNTIME_UNAVAILABLE);
+        assert(failedLaunchCount == 1);
+
+        auto secondFailedLaunch = makeRequest(
+            VDRWEB_HBBTV_RUNTIME_LAUNCH,
+            "session-launch-failure-b",
+            channel,
+            1,
+            newerRevision);
+
+        assert(failedLaunchRuntime.Handle(secondFailedLaunch));
+        assert(
+            secondFailedLaunch.result ==
+            VDRWEB_HBBTV_RUNTIME_RESULT_RUNTIME_UNAVAILABLE);
+        assert(failedLaunchCount == 2);
+    }
+
     VdrSuiteHbbtvDiscoveryStore::Upsert(
         channel,
         3,

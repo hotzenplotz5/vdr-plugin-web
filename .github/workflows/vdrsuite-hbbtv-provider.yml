@@ -16,6 +16,7 @@ on:
       - ".github/workflows/vdrsuite-hbbtv-provider.yml"
   push:
     branches:
+      - "master"
       - "fix/zdf-hbbtv-controls-input-static"
     paths:
       - "web.cpp"
