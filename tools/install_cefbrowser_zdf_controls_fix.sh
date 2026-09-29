@@ -13,49 +13,9 @@ if test ! -x "$PATCHER"; then
 fi
 
 if test "$CONTINUE" = "1" && test -z "$STATIC_ROOT"; then
-    PIDS="$(pgrep -x cefbrowser 2>/dev/null)"
-    COUNT="$(printf '%s\n' "$PIDS" | sed '/^$/d' | wc -l | tr -d ' ')"
-
-    if test "$COUNT" = "0"; then
-        echo "STOP: kein laufender cefbrowser gefunden; static root als Argument angeben"
+    STATIC_ROOT="$(python3 "$SCRIPT_DIR/detect_cefbrowser_static_root.py")"
+    if test "$?" != "0"; then
         CONTINUE=0
-    elif test "$COUNT" != "1"; then
-        echo "STOP: mehrere cefbrowser-Prozesse gefunden; static root als Argument angeben"
-        printf '%s\n' "$PIDS"
-        CONTINUE=0
-    else
-        PID="$PIDS"
-        NEXT_IS_STATIC=0
-
-        while IFS= read -r ARG; do
-            if test "$NEXT_IS_STATIC" = "1"; then
-                STATIC_ROOT="$ARG"
-                NEXT_IS_STATIC=0
-                continue
-            fi
-
-            case "$ARG" in
-                --staticPath=*)
-                    STATIC_ROOT="${ARG#--staticPath=}"
-                    ;;
-                --staticPath|-s)
-                    NEXT_IS_STATIC=1
-                    ;;
-                -s*)
-                    STATIC_ROOT="${ARG#-s}"
-                    ;;
-            esac
-        done < <(tr '\0' '\n' < "/proc/$PID/cmdline")
-
-        if test -z "$STATIC_ROOT"; then
-            EXE="$(readlink -f "/proc/$PID/exe" 2>/dev/null)"
-            if test -z "$EXE"; then
-                echo "STOP: cefbrowser executable konnte nicht aufgelöst werden"
-                CONTINUE=0
-            else
-                STATIC_ROOT="$(dirname "$EXE")"
-            fi
-        fi
     fi
 fi
 

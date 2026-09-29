@@ -3,6 +3,8 @@ name: VDR-Suite HbbTV provider
 on:
   pull_request:
     paths:
+      - "tools/detect_cefbrowser_static_root.py"
+      - "tests/test_cefbrowser_process_detection.py"
       - "tools/apply_cefbrowser_zdf_controls_fix.py"
       - "tools/install_cefbrowser_zdf_controls_fix.sh"
       - "tests/test_cefbrowser_zdf_static_override.py"
@@ -13,6 +15,8 @@ on:
     branches:
       - "fix/zdf-hbbtv-controls-input-static"
     paths:
+      - "tools/detect_cefbrowser_static_root.py"
+      - "tests/test_cefbrowser_process_detection.py"
       - "tools/apply_cefbrowser_zdf_controls_fix.py"
       - "tools/install_cefbrowser_zdf_controls_fix.sh"
       - "tests/test_cefbrowser_zdf_static_override.py"

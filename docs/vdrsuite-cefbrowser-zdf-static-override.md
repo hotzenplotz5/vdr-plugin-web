@@ -11,7 +11,7 @@ The correction is written against:
 
 No cefbrowser executable patch is required. cefbrowser serves and injects
 `static-content/js/*.js` and `static-content/css/*.css` from its configured
-`--staticPath` (or, when omitted, from the executable directory).
+`--staticPath`, `--staticpath` or `-s` (or, when omitted, from the executable directory).
 
 ## Root cause covered by this override
 
@@ -38,8 +38,18 @@ must prove ENTER/arrows before any additional CEF focus change is justified.
 ## Apply / verify / rollback
 
 `tools/install_cefbrowser_zdf_controls_fix.sh` auto-detects the running
-cefbrowser static root from `--staticPath/-s`, otherwise from the executable
-directory. The Python patcher validates exact upstream source markers before it
+cefbrowser static root from `--staticPath`, `--staticpath` or `-s`, otherwise from
+the executable directory. Both separate values and attached values are supported.
+It excludes CEF children with `--type=...` (also `--type VALUE`), prefers a unique
+main process with PPID 1, then a unique root of the remaining browser processes.
+Multiple equally preferred main processes, unreadable browser metadata, and
+empty or conflicting static options stop installation before any file changes.
+No manual PID selection is required. Relative paths resolve against the selected
+process's working directory. The real yaVDR main process (PID 1946, PPID 1) with
+`--staticpath=/var/lib/hbbtv/cefbrowser` therefore selects exactly that root,
+ignoring its zygote/GPU/utility/renderer children.
+
+The Python patcher validates exact upstream source markers before it
 writes anything, stages replacements, preserves one backup beside each source
 file and verifies all postconditions.
 

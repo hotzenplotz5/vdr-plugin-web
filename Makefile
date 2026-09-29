@@ -196,6 +196,7 @@ test-vdrsuite-hbbtv-provider-surface:
 	python3 tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
 
 test-vdrsuite-cefbrowser-zdf-static:
+	python3 tests/test_cefbrowser_process_detection.py
 	python3 tests/test_cefbrowser_zdf_static_override.py
 
 test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface test-vdrsuite-cefbrowser-zdf-static
