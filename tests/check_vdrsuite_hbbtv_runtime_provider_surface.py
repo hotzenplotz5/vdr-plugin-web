@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1]
+web = (root / "web.cpp").read_text(encoding="utf-8")
+header = (root / "service" / "vdrsuite_hbbtv_runtime_service.h").read_text(
+    encoding="utf-8"
+)
+presentation_header = (
+    root / "service" / "vdrsuite_hbbtv_presentation_service.h"
+).read_text(encoding="utf-8")
+media_header = (
+    root / "service" / "vdrsuite_hbbtv_media_service.h"
+).read_text(encoding="utf-8")
+osd = (root / "webosdpage.cpp").read_text(encoding="utf-8")
+
+required_web = (
+    '#include "service/vdrsuite_hbbtv_runtime_service.h"',
+    '#include "service/vdrsuite_hbbtv_presentation_service.h"',
+    '#include "service/vdrsuite_hbbtv_media_service.h"',
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_RUNTIME_V1) == 0',
+    'vdrSuiteHbbtvRuntimeService->Handle(',
+    'VdrSuiteHbbtvUiCommandType::Launch',
+    'VdrSuiteHbbtvUiCommandType::FinalizeClose',
+    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
+    'browserClient->RedButton(runtimeCommand.channelId)',
+    'browserClient->LoadUrl(VDRSUITE_HBBTV_BLANK_PAGE)',
+    'VdrSuiteHbbtvPresentationStore::BeginClose(',
+    'VdrSuiteHbbtvPresentationStore::CloseConfirmation(',
+    'browserClient->ProcessKey(key)',
+    'vdrSuiteHbbtvRuntimeService->CompleteLaunch(',
+    'runtimeHooks.closeConfirmation =',
+    'VdrSuiteHbbtvPresentationStore::BeginSession(',
+    'VdrSuiteHbbtvPresentationStore::EndSession(',
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0',
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_MEDIA_V1) == 0',
+    'VdrSuiteHbbtvMediaStore::BeginSession(',
+    'VdrSuiteHbbtvMediaStore::BeginVideo(',
+    'VdrSuiteHbbtvMediaStore::AppendTs(',
+    'VdrSuiteHbbtvMediaStore::StopVideo(',
+    'VdrSuiteHbbtvMediaStore::EndSession(',
+    '"http://localhost/internal/blank/page"',
+)
+
+required_header = (
+    '#define VDRWEB_SERVICE_HBBTV_RUNTIME_V1 "VdrWeb::HbbtvRuntime-v1"',
+    'VDRWEB_HBBTV_RUNTIME_RESULT_DISCOVERY_STALE',
+    'VDRWEB_HBBTV_RUNTIME_RESULT_APPLICATION_NOT_LAUNCHABLE',
+    'VDRWEB_HBBTV_RUNTIME_RESULT_ACTION_UNSUPPORTED',
+    'VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed',
+    'case VDRWEB_HBBTV_INPUT_OK: return "VK_ENTER";',
+    'case VDRWEB_HBBTV_INPUT_RED: return "VK_RED";',
+)
+
+for token in required_web:
+    if token not in web:
+        raise SystemExit(f'web.cpp: missing token: {token}')
+
+for token in required_header:
+    if token not in header:
+        raise SystemExit(f'runtime header: missing token: {token}')
+
+for token in (
+    '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V1 "VdrWeb::HbbtvPresentation-v1"',
+    'VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX 49152U',
+    'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN',
+    'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE',
+    'std::uint8_t visibility;',
+):
+    if token not in presentation_header:
+        raise SystemExit(f'presentation header: missing token: {token}')
+
+for token in (
+    '#define VDRWEB_SERVICE_HBBTV_MEDIA_V1 "VdrWeb::HbbtvMedia-v1"',
+    'VDRWEB_HBBTV_MEDIA_STATE_STREAMING',
+    'VDRWEB_HBBTV_MEDIA_STATE_PAUSED',
+    'std::uint64_t mediaRevision;',
+    'char socketPath[VDRWEB_HBBTV_MEDIA_SOCKET_PATH_MAX];',
+):
+    if token not in media_header:
+        raise SystemExit(f'media header: missing token: {token}')
+
+for token in (
+    'VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(',
+    'drawImageQOI',
+):
+    if token not in osd:
+        raise SystemExit(f'presentation capture missing token: {token}')
+
+service_start = web.find('bool cPluginWeb::Service(')
+service_end = web.find('const char **cPluginWeb::SVDRPHelpPages()', service_start)
+if service_start < 0 or service_end < 0:
+    raise SystemExit('unable to locate plugin Service/SVDRP boundary')
+
+reset_start = web.find(
+    'bool VdrPluginWebServer::ResetVideo(const ResetVideoType &input)'
+)
+reset_end = web.find(
+    'bool VdrPluginWebServer::SelectAudioTrack',
+    reset_start
+)
+if reset_start < 0 or reset_end < 0:
+    raise SystemExit('unable to locate ResetVideo boundary')
+
+reset_body = web[reset_start:reset_end]
+
+for required in (
+    'VdrSuiteHbbtvMediaStore::ResetVideo(input.videoInfo)',
+    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
+    'queueVdrSuiteHbbtvUiCommand(',
+):
+    if required not in reset_body:
+        raise SystemExit(
+            f'ResetVideo worker missing queued reset contract: {required}'
+        )
+
+for forbidden in (
+    'cControl::Shutdown()',
+    'cControl::Launch(',
+    'WebOSDPage::Create(',
+    'videoPlayer->ResetVideo()',
+    'VideoPlayer::SetVideoSize(',
+):
+    if forbidden in reset_body:
+        raise SystemExit(
+            f'ResetVideo worker owns VDR player lifecycle: {forbidden}'
+        )
+
+main_start = web.find(
+    'cOsdObject *cPluginWeb::MainMenuAction()'
+)
+if main_start < 0:
+    raise SystemExit('MainMenuAction boundary missing')
+
+main_body = web[main_start:]
+
+for required in (
+    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
+    'cControl::Shutdown()',
+    'WebOSDPage::Create(',
+    'cControl::Launch(',
+    'videoPlayer->ResetVideo()',
+    'VideoPlayer::SetVideoSize(',
+):
+    if required not in main_body:
+        raise SystemExit(
+            f'MainMenuAction reset ownership missing: {required}'
+        )
+
+service_body = web[service_start:service_end]
+runtime_block_start = service_body.find(
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_RUNTIME_V1) == 0'
+)
+if runtime_block_start < 0:
+    raise SystemExit('runtime service block missing')
+
+runtime_block = service_body[runtime_block_start:]
+for forbidden in ('param_url', 'WebApp-Url-v1.0', 'StartApplication('):
+    prefix = runtime_block.split('param_url = "";', 1)[0]
+    if forbidden in prefix:
+        raise SystemExit(
+            f'private runtime service unexpectedly exposes legacy token: {forbidden}'
+        )
+
+print("RESULT=VDRSUITE_HBBTV_RUNTIME_PROVIDER_SURFACE_PASS")

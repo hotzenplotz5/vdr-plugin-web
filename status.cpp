@@ -12,6 +12,7 @@
 #include "ait.h"
 #include "BrowserClient.h"
 #include "webosdpage.h"
+#include "service/vdrsuite_hbbtv_discovery_service.h"
 
 const char *channelJson = R"(
     {
@@ -82,6 +83,9 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
          device = nullptr;
          aitFilter = nullptr;
          sid = -1;
+         // ChannelNumber == 0 is VDR's pre-switch notification.
+         // Keep the current HbbTV discovery until the concrete
+         // target channel is known below.
       }
 
       if (channelNumber) {
@@ -94,6 +98,9 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
          auto channel = Channels->GetByNumber(channelNumber);
 #endif
          sid = channel->Sid();
+
+         VdrSuiteHbbtvDiscoveryStore::BeginChannel(
+             *channel->GetChannelID().ToString());
 
          const char* buffer = toChannelJson(channel);
          browserClient->InsertChannel(buffer);
