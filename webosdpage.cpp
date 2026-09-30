@@ -6,11 +6,11 @@
 #include <mutex>
 #include "webosdpage.h"
 #include "web.h"
+#include "service/hbbtv_presentation_service.h"
 
 // #define MEASURE_SCALE_TIME 1
 // #define DEBUG_SAVE_OSD_IMAGE 1
 
-#define QOI_IMPLEMENTATION
 #include "qoi.h"
 
 std::recursive_mutex pixmap_mutex;
@@ -208,6 +208,18 @@ void WebOSDPage::SetOsdSize() {
 
 bool WebOSDPage::drawImage(uint8_t* image, int render_width, int render_height, int x, int y, int width, int height) {
 
+    if (!VdrWebHbbtvPresentationStore::ApplyBgraPatch(
+            image,
+            render_width,
+            render_height,
+            x,
+            y,
+            width,
+            height)) {
+        esyslog("[vdrweb] failed to capture HbbTV presentation patch");
+        return false;
+    }
+
 #ifdef DEBUG_SAVE_OSD_IMAGE
     static int osd_image_number = 0;
 
@@ -250,6 +262,19 @@ bool WebOSDPage::drawImageQOI(const std::string qoibuffer, const int render_widt
     if (image == nullptr) {
         // something failed
         esyslog("[vdrweb] failed to decode qoi OSD image");
+        return false;
+    }
+
+    if (!VdrWebHbbtvPresentationStore::ApplyBgraPatch(
+            static_cast<uint8_t *>(image),
+            render_width,
+            render_height,
+            x,
+            y,
+            static_cast<int>(desc.width),
+            static_cast<int>(desc.height))) {
+        free(image);
+        esyslog("[vdrweb] failed to capture HbbTV QOI presentation patch");
         return false;
     }
 

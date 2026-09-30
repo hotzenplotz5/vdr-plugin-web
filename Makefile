@@ -71,7 +71,10 @@ APIVERSION = $(call PKGCFG,apiversion)
 
 ARCHIVE = $(PLUGIN)-$(VERSION)
 PACKAGE = vdr-$(ARCHIVE)
-HBBTV_DISCOVERY_TEST = /tmp/test_hbbtv_discovery_service
+HBBTV_DISCOVERY_TEST = /tmp/test_vdrweb_hbbtv_discovery_service
+HBBTV_RUNTIME_TEST = /tmp/test_vdrweb_hbbtv_runtime_service
+HBBTV_PRESENTATION_TEST = /tmp/test_vdrweb_hbbtv_presentation_service
+HBBTV_MEDIA_TEST = /tmp/test_vdrweb_hbbtv_media_service
 
 ### The name of the shared object file:
 
@@ -98,7 +101,7 @@ DEFINES += -DPLUGIN_NAME_I18N='"$(PLUGIN)"' $(CONFIG)
 
 ### The object files (add further files here):
 
-OBJS = $(PLUGIN).o webosdpage.o status.o ait.o videocontrol.o backtrace.o \
+OBJS = $(PLUGIN).o webosdpage.o qoi_impl.o service/vdrweb_hbbtv_presentation_service.o service/vdrweb_hbbtv_media_service.o status.o ait.o videocontrol.o backtrace.o \
 	   thrift-services/src-gen/CommonService.o thrift-services/src-gen/common_types.o \
 	   thrift-services/src-gen/VdrPluginWeb.o thrift-services/src-gen/pluginweb_types.o \
 	   thrift-services/src-gen/CefBrowser.o thrift-services/src-gen/cefbrowser_types.o \
@@ -151,7 +154,7 @@ $(I18Npot): $(wildcard *.cpp)
 $(I18Nmsgs): $(DESTDIR)$(LOCDIR)/%/LC_MESSAGES/vdr-$(PLUGIN).mo: $(PODIR)/%.mo
 	install -D -m644 $< $@
 
-.PHONY: i18n test-hbbtv-discovery
+.PHONY: i18n test-hbbtv-discovery test-hbbtv-runtime test-hbbtv-presentation test-hbbtv-media test-hbbtv-provider-surface test-hbbtv
 i18n: $(I18Nmo) $(I18Npot)
 
 install-i18n: $(I18Nmsgs)
@@ -165,6 +168,34 @@ test-hbbtv-discovery:
 		-pthread -o $(HBBTV_DISCOVERY_TEST)
 	$(HBBTV_DISCOVERY_TEST)
 	rm -f $(HBBTV_DISCOVERY_TEST)
+
+test-hbbtv-runtime:
+	$(CXX) -std=c++17 -Wall -Wextra -pedantic -I. \
+		tests/test_hbbtv_runtime_service.cpp \
+		-pthread -o $(HBBTV_RUNTIME_TEST)
+	$(HBBTV_RUNTIME_TEST)
+	rm -f $(HBBTV_RUNTIME_TEST)
+
+test-hbbtv-presentation:
+	$(CXX) -std=c++17 -Wall -Wextra -pedantic -I. \
+		tests/test_hbbtv_presentation_service.cpp \
+		service/vdrweb_hbbtv_presentation_service.cpp qoi_impl.cpp \
+		-pthread -o $(HBBTV_PRESENTATION_TEST)
+	$(HBBTV_PRESENTATION_TEST)
+	rm -f $(HBBTV_PRESENTATION_TEST)
+
+test-hbbtv-media:
+	$(CXX) -std=c++17 -Wall -Wextra -pedantic -I. \
+		tests/test_hbbtv_media_service.cpp \
+		service/vdrweb_hbbtv_media_service.cpp \
+		-pthread -o $(HBBTV_MEDIA_TEST)
+	$(HBBTV_MEDIA_TEST)
+	rm -f $(HBBTV_MEDIA_TEST)
+
+test-hbbtv-provider-surface:
+	python3 tests/check_hbbtv_runtime_provider_surface.py
+
+test-hbbtv: test-hbbtv-discovery test-hbbtv-runtime test-hbbtv-presentation test-hbbtv-media test-hbbtv-provider-surface
 
 $(SOFILE): $(OBJS)
 	@echo LD $@
@@ -191,4 +222,4 @@ dist: $(I18Npo) clean
 
 clean:
 	@-rm -f $(PODIR)/*.mo
-	@-rm -f $(OBJS) $(DEPFILE) $(HBBTV_DISCOVERY_TEST) *.so *.tgz core* *~
+	@-rm -f $(OBJS) $(DEPFILE) $(HBBTV_DISCOVERY_TEST) $(HBBTV_RUNTIME_TEST) $(HBBTV_PRESENTATION_TEST) $(HBBTV_MEDIA_TEST) *.so *.tgz core* *~
