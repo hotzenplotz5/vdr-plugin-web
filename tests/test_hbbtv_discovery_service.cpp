@@ -1,4 +1,4 @@
-#include "../service/vdrsuite_hbbtv_discovery_service.h"
+#include "../service/hbbtv_discovery_service.h"
 
 #include <cassert>
 #include <cstring>
@@ -31,11 +31,11 @@ int main()
 
     const char *channel = "C-1-1051-10301";
 
-    VdrSuiteHbbtvDiscoveryStore::BeginChannel(channel);
+    VdrWebHbbtvDiscoveryStore::BeginChannel(channel);
 
     VdrWebHbbtvDiscoveryV1 empty{};
     requestChannel(empty, channel);
-    assert(VdrSuiteHbbtvDiscoveryStore::Read(empty));
+    assert(VdrWebHbbtvDiscoveryStore::Read(empty));
     assert(empty.schemaVersion == VDRWEB_HBBTV_SERVICE_SCHEMA_V1);
     assert(empty.result == VDRWEB_HBBTV_RESULT_NO_APPLICATIONS);
     assert(empty.receiverActive == 1);
@@ -43,7 +43,7 @@ int main()
     const uint64_t emptyRevision = empty.discoveryRevision;
     assert(emptyRevision != 0);
 
-    VdrSuiteHbbtvDiscoveryStore::Upsert(
+    VdrWebHbbtvDiscoveryStore::Upsert(
         channel,
         7,
         2,
@@ -55,7 +55,7 @@ int main()
 
     VdrWebHbbtvDiscoveryV1 discovered{};
     requestChannel(discovered, channel);
-    assert(VdrSuiteHbbtvDiscoveryStore::Read(discovered));
+    assert(VdrWebHbbtvDiscoveryStore::Read(discovered));
     assert(discovered.result == VDRWEB_HBBTV_RESULT_OK);
     assert(discovered.receiverActive == 1);
     assert(discovered.applicationCount == 1);
@@ -69,7 +69,7 @@ int main()
         "https://example.invalid/") == 0);
     const uint64_t applicationRevision = discovered.discoveryRevision;
 
-    VdrSuiteHbbtvDiscoveryStore::Upsert(
+    VdrWebHbbtvDiscoveryStore::Upsert(
         channel,
         7,
         2,
@@ -81,10 +81,10 @@ int main()
 
     VdrWebHbbtvDiscoveryV1 duplicate{};
     requestChannel(duplicate, channel);
-    assert(VdrSuiteHbbtvDiscoveryStore::Read(duplicate));
+    assert(VdrWebHbbtvDiscoveryStore::Read(duplicate));
     assert(duplicate.discoveryRevision == applicationRevision);
 
-    VdrSuiteHbbtvDiscoveryStore::Upsert(
+    VdrWebHbbtvDiscoveryStore::Upsert(
         channel,
         7,
         2,
@@ -96,27 +96,27 @@ int main()
 
     VdrWebHbbtvDiscoveryV1 changed{};
     requestChannel(changed, channel);
-    assert(VdrSuiteHbbtvDiscoveryStore::Read(changed));
+    assert(VdrWebHbbtvDiscoveryStore::Read(changed));
     assert(changed.discoveryRevision > applicationRevision);
     assert(changed.applications[0].priority == 6);
 
     VdrWebHbbtvDiscoveryV1 mismatch{};
     requestChannel(mismatch, "C-1-1051-99999");
-    assert(VdrSuiteHbbtvDiscoveryStore::Read(mismatch));
+    assert(VdrWebHbbtvDiscoveryStore::Read(mismatch));
     assert(mismatch.result == VDRWEB_HBBTV_RESULT_CHANNEL_MISMATCH);
 
-    VdrSuiteHbbtvDiscoveryStore::EndChannel();
+    VdrWebHbbtvDiscoveryStore::EndChannel();
 
     VdrWebHbbtvDiscoveryV1 inactive{};
     requestChannel(inactive, channel);
-    assert(VdrSuiteHbbtvDiscoveryStore::Read(inactive));
+    assert(VdrWebHbbtvDiscoveryStore::Read(inactive));
     assert(inactive.result == VDRWEB_HBBTV_RESULT_RECEIVER_INACTIVE);
     assert(inactive.receiverActive == 0);
     assert(inactive.applicationCount == 0);
 
     VdrWebHbbtvDiscoveryV1 invalid{};
     invalid.structSize = 1;
-    assert(VdrSuiteHbbtvDiscoveryStore::Read(invalid));
+    assert(VdrWebHbbtvDiscoveryStore::Read(invalid));
     assert(invalid.result == VDRWEB_HBBTV_RESULT_INVALID_REQUEST);
 
     return 0;

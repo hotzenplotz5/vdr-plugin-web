@@ -14,7 +14,7 @@
 #include "ait.h"
 #include "status.h"
 #include "web.h"
-#include "service/vdrsuite_hbbtv_discovery_service.h"
+#include "service/hbbtv_discovery_service.h"
 
 #define PMT_SCAN_IDLE     5 // 60 //300    // seconds
 
@@ -150,7 +150,7 @@ cAIT::cAIT(const u_char *Data, u_short Pid) : SI::AIT(Data, true) {
 
         const cString currentChannelId = currentChannel->GetChannelID().ToString();
 
-        VdrSuiteHbbtvDiscoveryStore::Upsert(
+        VdrWebHbbtvDiscoveryStore::Upsert(
             *currentChannelId,
             static_cast<uint32_t>(aitApp.getApplicationId()),
             static_cast<uint8_t>(aitApp.getControlCode()),

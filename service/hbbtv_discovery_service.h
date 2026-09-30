@@ -10,8 +10,7 @@
 #include <utility>
 #include <vector>
 
-// Read-only VDR service used by VDR-Suite.
-// Keep byte-compatible with VDR-Suite's mirrored provider contract.
+// Read-only VDR service for HbbTV application discovery.
 #define VDRWEB_SERVICE_HBBTV_DISCOVERY_V1 "VdrWeb::HbbtvDiscovery-v1"
 
 #define VDRWEB_HBBTV_SERVICE_SCHEMA_V1 1U
@@ -58,7 +57,7 @@ struct VdrWebHbbtvDiscoveryV1 {
     VdrWebHbbtvApplicationV1 applications[VDRWEB_HBBTV_MAX_APPLICATIONS];
 };
 
-class VdrSuiteHbbtvDiscoveryStore final {
+class VdrWebHbbtvDiscoveryStore final {
 private:
     struct Application {
         uint32_t applicationId = 0;

@@ -21,7 +21,7 @@
 #include "webosdpage.h"
 #include "status.h"
 #include "videocontrol.h"
-#include "service/vdrsuite_hbbtv_discovery_service.h"
+#include "service/hbbtv_discovery_service.h"
 #include "dummyosd.h"
 #include "debuglog.h"
 
@@ -591,7 +591,7 @@ bool cPluginWeb::Service(const char *Id, void *Data = nullptr) {
         if (Data == nullptr)
             return false;
 
-        return VdrSuiteHbbtvDiscoveryStore::Read(
+        return VdrWebHbbtvDiscoveryStore::Read(
             *static_cast<VdrWebHbbtvDiscoveryV1 *>(Data));
     }
 
