@@ -71,7 +71,7 @@ APIVERSION = $(call PKGCFG,apiversion)
 
 ARCHIVE = $(PLUGIN)-$(VERSION)
 PACKAGE = vdr-$(ARCHIVE)
-HBBTV_DISCOVERY_TEST = /tmp/test_vdrsuite_hbbtv_discovery_service
+HBBTV_DISCOVERY_TEST = /tmp/test_hbbtv_discovery_service
 
 ### The name of the shared object file:
 
