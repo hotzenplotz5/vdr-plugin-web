@@ -6,10 +6,15 @@ if [[ "$EUID" -eq 0 ]]; then
   echo 'REFUSING_ROOT=1' >&2
   exit 2
 fi
-if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 NEW_OUTPUT_DIRECTORY" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: $0 NEW_OUTPUT_DIRECTORY [noble|resolute]" >&2
   exit 2
 fi
+series="${2:-noble}"
+case "$series" in
+  noble|resolute) ;;
+  *) echo "UNSUPPORTED_SERIES=$series" >&2; exit 2 ;;
+esac
 repo_root="$(cd -- "$(dirname -- "$0")/../.." && pwd -P)"
 out="$1"
 if [[ -e "$out" ]]; then
@@ -20,7 +25,7 @@ mkdir -p -- "$out"
 out="$(cd "$out" && pwd -P)"
 original_name='0.0.1+git20260827-111-34ded50'
 archive_version="$original_name-1yavdr1~resolute"
-version="$original_name-1yavdr1+vdrsuite1~noble"
+version="$original_name-1yavdr1+vdrsuite1~$series"
 url_root="https://launchpad.net/~seahawk1986-hotmail/+archive/ubuntu/vdr-2.8.3/+sourcefiles/vdr-plugin-web/$archive_version"
 orig="vdr-plugin-web_$original_name.orig.tar.gz"
 deb="vdr-plugin-web_$archive_version.debian.tar.bz2"
@@ -49,12 +54,13 @@ for patch in \
   cp -- "$repo_root/debian/patches/$patch" "$src/debian/patches/$patch"
   printf '%s\n' "$patch" >> "$src/debian/patches/series"
 done
-python3 - "$src" "$version" <<'PY'
+python3 - "$src" "$version" "$series" <<'PY'
 import datetime
 import pathlib
 import sys
 root=pathlib.Path(sys.argv[1])
 version=sys.argv[2]
+series=sys.argv[3]
 control=root/'debian/control'
 txt=control.read_text()
 old='Depends: ${shlibs:Depends}, ${misc:Depends}'
@@ -68,7 +74,7 @@ install.write_text(install.read_text().rstrip('\n')+'\n'+
   'tools/install_cefbrowser_zdf_controls_fix.sh usr/share/vdr-plugin-web/vdr-suite-tools/\n')
 changelog=root/'debian/changelog'
 stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%a, %d %b %Y %H:%M:%S +0000')
-entry=(f'vdr-plugin-web ({version}) noble; urgency=medium\n\n'
+entry=(f'vdr-plugin-web ({version}) {series}; urgency=medium\n\n'
        '  * Add VDR-Suite HbbTV services as quilt patches.\n'
        '  * Preserve Seahawk fastscale patch and original Debian packaging.\n'
        '  * Add VDR ABI dependency and opt-in CEF correction tools.\n\n'
