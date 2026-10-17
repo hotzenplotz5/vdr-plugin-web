@@ -36,6 +36,10 @@ tar -xzf "$orig" -C "$out"
 test -d "$src"
 tar -xjf "$deb" -C "$src"
 test "$(tr -d '\r' < "$src/debian/patches/series" | sed '/^$/d')" = 'enable_fastscale.patch'
+test -s "$src/debian/patches/fix_thrift-services_ftbs.patch"
+# Seahawk ships this libthrift compatibility fix but does not enable it;
+# Noble's installed libthrift requires it (TOutput::instance no longer exists).
+printf '%s\n' 'fix_thrift-services_ftbs.patch' >> "$src/debian/patches/series"
 for patch in \
   0001-vdrsuite-hbbtv-discovery.patch \
   0002-vdrsuite-hbbtv-session-runtime.patch \
