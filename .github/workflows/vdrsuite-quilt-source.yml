@@ -92,7 +92,7 @@ jobs:
           chmod 0755 /usr/sbin/policy-rc.d
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git python3 gnupg software-properties-common
+          apt-get install -y --no-install-recommends ca-certificates git curl gzip bzip2 python3 gnupg software-properties-common
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
