@@ -1,4 +1,5 @@
 enable_fastscale.patch
+fix_thrift-services_ftbs.patch
 0001-vdrsuite-hbbtv-discovery.patch
 0002-vdrsuite-hbbtv-session-runtime.patch
 0003-vdrsuite-hbbtv-presentation-media.patch
