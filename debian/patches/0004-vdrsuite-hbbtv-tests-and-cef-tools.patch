@@ -1,0 +1,2166 @@
+Description: VDR-Suite HbbTV support derived from the pinned maintainer fork
+Origin: https://github.com/hotzenplotz5/vdr-plugin-web
+Comment: Git diff 34ded5090fbad021338c491355566dbdb4d98f9d..35f50dd8a3a611d56039d190c093a489e4a0193e, group 0004-vdrsuite-hbbtv-tests-and-cef-tools.patch
+Forwarded: no
+---
+diff --git a/.github/workflows/vdrsuite-hbbtv-provider.yml b/.github/workflows/vdrsuite-hbbtv-provider.yml
+new file mode 100644
+index 0000000..13460c0
+--- /dev/null
++++ b/.github/workflows/vdrsuite-hbbtv-provider.yml
+@@ -0,0 +1,46 @@
++name: VDR-Suite HbbTV provider
++
++on:
++  pull_request:
++    paths:
++      - "web.cpp"
++      - "service/**"
++      - "tests/**"
++      - "tools/detect_cefbrowser_static_root.py"
++      - "tests/test_cefbrowser_process_detection.py"
++      - "tools/apply_cefbrowser_zdf_controls_fix.py"
++      - "tools/install_cefbrowser_zdf_controls_fix.sh"
++      - "tests/test_cefbrowser_zdf_static_override.py"
++      - "docs/vdrsuite-cefbrowser-zdf-static-override.md"
++      - "Makefile"
++      - ".github/workflows/vdrsuite-hbbtv-provider.yml"
++  push:
++    branches:
++      - "main"
++      - "master"
++      - "fix/zdf-hbbtv-controls-input-static"
++    paths:
++      - "web.cpp"
++      - "service/**"
++      - "tests/**"
++      - "tools/detect_cefbrowser_static_root.py"
++      - "tests/test_cefbrowser_process_detection.py"
++      - "tools/apply_cefbrowser_zdf_controls_fix.py"
++      - "tools/install_cefbrowser_zdf_controls_fix.sh"
++      - "tests/test_cefbrowser_zdf_static_override.py"
++      - "docs/vdrsuite-cefbrowser-zdf-static-override.md"
++      - "Makefile"
++      - ".github/workflows/vdrsuite-hbbtv-provider.yml"
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++jobs:
++  zdf-static-override:
++    runs-on: ubuntu-latest
++    timeout-minutes: 5
++    steps:
++      - uses: actions/checkout@v4
++      - name: Validate ZDF controls/input static override
++        run: make test-vdrsuite-hbbtv
+diff --git a/docs/vdrsuite-cefbrowser-zdf-static-override.md b/docs/vdrsuite-cefbrowser-zdf-static-override.md
+new file mode 100644
+index 0000000..63eadbf
+--- /dev/null
++++ b/docs/vdrsuite-cefbrowser-zdf-static-override.md
+@@ -0,0 +1,99 @@
++# ZDF HbbTV controls/input static override
++
++## Live ARD failure found on 2026-09-29
++
++The live session had already navigated to `http://localhost/internal/blank/page`
++while the external ARD video continued. PAUSE/STOP produced
++`window.cefKeyPress is not a function`. The provider log showed local OSD/player
++destruction at video start. cefbrowser's `checkVdrRegular()` navigates to the
++blank page whenever the provider's `IsWebActive()` reports false.
++
++The provider now keeps the browser alive for owned starting/active/closing Suite
++sessions, captures raw/QOI browser frames directly into the presentation store,
++and bypasses local player/OSD replacement for Suite video starts. Legacy local
++playback retains its existing path. This part requires a rebuilt VDR plugin;
++the static installer alone cannot repair an already blank browser session.
++No service restart is performed by the static installer. After installing the
++rebuilt plugin and restarting VDR, the user confirmed visible controls and
++working PAUSE, OK and STOP on 2026-09-29. The repository also includes the local
++corrections present in that accepted build: same-channel discovery continuity,
++release of failed/closed runtime ownership, and main-thread player resets.
++
++The real CEF process also rewrites `/proc/PID/cmdline` into one space-separated
++process title. Detection handles that form as well as normal NUL-separated argv;
++the real PID 1946 resolves to `/var/lib/hbbtv/cefbrowser`.
++
++This directory documents the VDR-Suite runtime correction for the cefbrowser
++static-content boundary used by `vdr-plugin-web`.
++
++## Pinned upstream
++
++The correction is written against:
++
++`Zabrimus/cefbrowser@d14517be4a7aecfc3ba0b77831af237721ef48e9`
++
++No cefbrowser executable patch is required. cefbrowser serves and injects
++`static-content/js/*.js` and `static-content/css/*.css` from its configured
++`--staticPath`, `--staticpath` or `-s` (or, when omitted, from the executable directory).
++
++## Root cause covered by this override
++
++For `*-hbbtv.zdf.de`, upstream `video_quirks.js` hides the complete
++`#root` tree when external video starts. That also hides native ZDF controls.
++At the same time, upstream `cefKeyPress()` dispatches synthetic HbbTV media
++and colour keys on `document`, so element/root handlers do not receive those
++events as descendants.
++
++The override keeps the ZDF application tree alive:
++
++- only actual browser `<video>` pixels receive the dedicated hidden class;
++- the video's ancestor chain up to `#root` is made background-transparent,
++  allowing the external VDR-Suite media plane to remain visible;
++- native application controls remain visible and focusable;
++- synthetic ZDF HbbTV keys dispatch to the active element when possible, or to
++  `#root`, and then bubble to document/window listeners;
++- non-ZDF key dispatch remains unchanged.
++
++The native CEF key path for ENTER/arrows is intentionally not rewritten in this
++slice. Keeping the ZDF root visible preserves its focus tree; real acceptance
++must prove ENTER/arrows before any additional CEF focus change is justified.
++
++## Apply / verify / rollback
++
++`tools/install_cefbrowser_zdf_controls_fix.sh` auto-detects the running
++cefbrowser static root from `--staticPath`, `--staticpath` or `-s`, otherwise from
++the executable directory. Both separate values and attached values are supported.
++It excludes CEF children with `--type=...` (also `--type VALUE`), prefers a unique
++main process with PPID 1, then a unique root of the remaining browser processes.
++Multiple equally preferred main processes, unreadable browser metadata, and
++empty or conflicting static options stop installation before any file changes.
++No manual PID selection is required. Relative paths resolve against the selected
++process's working directory. The real yaVDR main process (PID 1946, PPID 1) with
++`--staticpath=/var/lib/hbbtv/cefbrowser` therefore selects exactly that root,
++ignoring its zygote/GPU/utility/renderer children.
++
++The Python patcher validates exact upstream source markers before it
++writes anything, stages replacements, preserves one backup beside each source
++file and verifies all postconditions.
++
++Apply:
++
++```sh
++tools/install_cefbrowser_zdf_controls_fix.sh
++```
++
++Verify an explicit root:
++
++```sh
++python3 tools/apply_cefbrowser_zdf_controls_fix.py --root /path/to/static-content --check
++```
++
++Rollback:
++
++```sh
++python3 tools/apply_cefbrowser_zdf_controls_fix.py --root /path/to/static-content --restore
++```
++
++A running HbbTV page has already loaded the old scripts. After applying the
++override, close HbbTV and start a fresh application session. No VDR,
++vdr-suite-daemon or cefbrowser restart is part of this installer.
+diff --git a/tests/check_vdrsuite_hbbtv_runtime_provider_surface.py b/tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
+new file mode 100755
+index 0000000..dac8a48
+--- /dev/null
++++ b/tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
+@@ -0,0 +1,166 @@
++#!/usr/bin/env python3
++
++from pathlib import Path
++
++root = Path(__file__).resolve().parents[1]
++web = (root / "web.cpp").read_text(encoding="utf-8")
++header = (root / "service" / "vdrsuite_hbbtv_runtime_service.h").read_text(
++    encoding="utf-8"
++)
++presentation_header = (
++    root / "service" / "vdrsuite_hbbtv_presentation_service.h"
++).read_text(encoding="utf-8")
++media_header = (
++    root / "service" / "vdrsuite_hbbtv_media_service.h"
++).read_text(encoding="utf-8")
++osd = (root / "webosdpage.cpp").read_text(encoding="utf-8")
++
++required_web = (
++    '#include "service/vdrsuite_hbbtv_runtime_service.h"',
++    '#include "service/vdrsuite_hbbtv_presentation_service.h"',
++    '#include "service/vdrsuite_hbbtv_media_service.h"',
++    'strcmp(Id, VDRWEB_SERVICE_HBBTV_RUNTIME_V1) == 0',
++    'vdrSuiteHbbtvRuntimeService->Handle(',
++    'VdrSuiteHbbtvUiCommandType::Launch',
++    'VdrSuiteHbbtvUiCommandType::FinalizeClose',
++    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
++    'browserClient->RedButton(runtimeCommand.channelId)',
++    'browserClient->LoadUrl(VDRSUITE_HBBTV_BLANK_PAGE)',
++    'VdrSuiteHbbtvPresentationStore::BeginClose(',
++    'VdrSuiteHbbtvPresentationStore::CloseConfirmation(',
++    'browserClient->ProcessKey(key)',
++    'vdrSuiteHbbtvRuntimeService->CompleteLaunch(',
++    'runtimeHooks.closeConfirmation =',
++    'VdrSuiteHbbtvPresentationStore::BeginSession(',
++    'VdrSuiteHbbtvPresentationStore::EndSession(',
++    'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0',
++    'strcmp(Id, VDRWEB_SERVICE_HBBTV_MEDIA_V1) == 0',
++    'VdrSuiteHbbtvMediaStore::BeginSession(',
++    'VdrSuiteHbbtvMediaStore::BeginVideo(',
++    'VdrSuiteHbbtvMediaStore::AppendTs(',
++    'VdrSuiteHbbtvMediaStore::StopVideo(',
++    'VdrSuiteHbbtvMediaStore::EndSession(',
++    '"http://localhost/internal/blank/page"',
++)
++
++required_header = (
++    '#define VDRWEB_SERVICE_HBBTV_RUNTIME_V1 "VdrWeb::HbbtvRuntime-v1"',
++    'VDRWEB_HBBTV_RUNTIME_RESULT_DISCOVERY_STALE',
++    'VDRWEB_HBBTV_RUNTIME_RESULT_APPLICATION_NOT_LAUNCHABLE',
++    'VDRWEB_HBBTV_RUNTIME_RESULT_ACTION_UNSUPPORTED',
++    'VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed',
++    'case VDRWEB_HBBTV_INPUT_OK: return "VK_ENTER";',
++    'case VDRWEB_HBBTV_INPUT_RED: return "VK_RED";',
++)
++
++for token in required_web:
++    if token not in web:
++        raise SystemExit(f'web.cpp: missing token: {token}')
++
++for token in required_header:
++    if token not in header:
++        raise SystemExit(f'runtime header: missing token: {token}')
++
++for token in (
++    '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V1 "VdrWeb::HbbtvPresentation-v1"',
++    'VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX 49152U',
++    'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN',
++    'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE',
++    'std::uint8_t visibility;',
++):
++    if token not in presentation_header:
++        raise SystemExit(f'presentation header: missing token: {token}')
++
++for token in (
++    '#define VDRWEB_SERVICE_HBBTV_MEDIA_V1 "VdrWeb::HbbtvMedia-v1"',
++    'VDRWEB_HBBTV_MEDIA_STATE_STREAMING',
++    'VDRWEB_HBBTV_MEDIA_STATE_PAUSED',
++    'std::uint64_t mediaRevision;',
++    'char socketPath[VDRWEB_HBBTV_MEDIA_SOCKET_PATH_MAX];',
++):
++    if token not in media_header:
++        raise SystemExit(f'media header: missing token: {token}')
++
++for token in (
++    'VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(',
++    'drawImageQOI',
++):
++    if token not in osd:
++        raise SystemExit(f'presentation capture missing token: {token}')
++
++service_start = web.find('bool cPluginWeb::Service(')
++service_end = web.find('const char **cPluginWeb::SVDRPHelpPages()', service_start)
++if service_start < 0 or service_end < 0:
++    raise SystemExit('unable to locate plugin Service/SVDRP boundary')
++
++reset_start = web.find(
++    'bool VdrPluginWebServer::ResetVideo(const ResetVideoType &input)'
++)
++reset_end = web.find(
++    'bool VdrPluginWebServer::SelectAudioTrack',
++    reset_start
++)
++if reset_start < 0 or reset_end < 0:
++    raise SystemExit('unable to locate ResetVideo boundary')
++
++reset_body = web[reset_start:reset_end]
++
++for required in (
++    'VdrSuiteHbbtvMediaStore::ResetVideo(input.videoInfo)',
++    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
++    'queueVdrSuiteHbbtvUiCommand(',
++):
++    if required not in reset_body:
++        raise SystemExit(
++            f'ResetVideo worker missing queued reset contract: {required}'
++        )
++
++for forbidden in (
++    'cControl::Shutdown()',
++    'cControl::Launch(',
++    'WebOSDPage::Create(',
++    'videoPlayer->ResetVideo()',
++    'VideoPlayer::SetVideoSize(',
++):
++    if forbidden in reset_body:
++        raise SystemExit(
++            f'ResetVideo worker owns VDR player lifecycle: {forbidden}'
++        )
++
++main_start = web.find(
++    'cOsdObject *cPluginWeb::MainMenuAction()'
++)
++if main_start < 0:
++    raise SystemExit('MainMenuAction boundary missing')
++
++main_body = web[main_start:]
++
++for required in (
++    'VdrSuiteHbbtvUiCommandType::ResetPlayer',
++    'cControl::Shutdown()',
++    'WebOSDPage::Create(',
++    'cControl::Launch(',
++    'videoPlayer->ResetVideo()',
++    'VideoPlayer::SetVideoSize(',
++):
++    if required not in main_body:
++        raise SystemExit(
++            f'MainMenuAction reset ownership missing: {required}'
++        )
++
++service_body = web[service_start:service_end]
++runtime_block_start = service_body.find(
++    'strcmp(Id, VDRWEB_SERVICE_HBBTV_RUNTIME_V1) == 0'
++)
++if runtime_block_start < 0:
++    raise SystemExit('runtime service block missing')
++
++runtime_block = service_body[runtime_block_start:]
++for forbidden in ('param_url', 'WebApp-Url-v1.0', 'StartApplication('):
++    prefix = runtime_block.split('param_url = "";', 1)[0]
++    if forbidden in prefix:
++        raise SystemExit(
++            f'private runtime service unexpectedly exposes legacy token: {forbidden}'
++        )
++
++print("RESULT=VDRSUITE_HBBTV_RUNTIME_PROVIDER_SURFACE_PASS")
+diff --git a/tests/test_cefbrowser_process_detection.py b/tests/test_cefbrowser_process_detection.py
+new file mode 100644
+index 0000000..dcb3ba7
+--- /dev/null
++++ b/tests/test_cefbrowser_process_detection.py
+@@ -0,0 +1,149 @@
++#!/usr/bin/env python3
++"""Regression coverage for the real yaVDR process tree and static options."""
++
++import importlib.util
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import tempfile
++import unittest
++
++ROOT = Path(__file__).resolve().parents[1]
++spec = importlib.util.spec_from_file_location(
++    "detector", ROOT / "tools/detect_cefbrowser_static_root.py")
++detector = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(detector)
++
++
++class DetectionTests(unittest.TestCase):
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.addCleanup(self.temp.cleanup)
++        self.proc = Path(self.temp.name)
++
++    def process(self, pid, parent, *args):
++        entry = self.proc / str(pid)
++        entry.mkdir()
++        (entry / "comm").write_text("cefbrowser\n")
++        (entry / "status").write_text(f"Name:\tcefbrowser\nPPid:\t{parent}\n")
++        (entry / "cmdline").write_bytes(
++            ("\0".join(["/opt/hbbtv/cefbrowser/cefbrowser", *args]) + "\0").encode())
++        return entry
++
++    def test_real_yavdr_inventory(self):
++        self.process(1946, 1, "--config=/etc/hbbtv/sockets.ini",
++                     "--profilepath=/var/lib/hbbtv/cefbrowser/profile",
++                     "--cachepath=/var/lib/hbbtv/cefbrowser/profile/cache",
++                     "--staticpath=/var/lib/hbbtv/cefbrowser",
++                     "--browserdb=/var/lib/hbbtv/cefbrowser/database",
++                     "--uagent=/var/lib/hbbtv/cefbrowser/database",
++                     "--ozone-platform=headless", "--disable-gpu")
++        for pid, parent, kind in [(2098, 1946, "zygote"), (2099, 1946, "zygote"),
++                                  (2216, 2098, "gpu-process"), (2236, 2099, "utility"),
++                                  (2500, 2099, "renderer")]:
++            self.process(pid, parent, f"--type={kind}", "--staticpath=/wrong")
++        self.assertEqual(detector.detect(self.proc),
++                         (1946, Path("/var/lib/hbbtv/cefbrowser")))
++
++    def test_option_spellings_and_spaces(self):
++        for option in ["--staticPath", "--staticpath", "-s"]:
++            with self.subTest(option=option):
++                self.assertEqual(detector.static_argument(["cef", option, "/static path"]),
++                                 "/static path")
++        for option in ["--staticPath=", "--staticpath=", "-s"]:
++            self.assertEqual(detector.static_argument(["cef", option + "/static path"]),
++                             "/static path")
++
++    def test_cef_rewritten_process_title(self):
++        entry = self.process(1946, 1)
++        (entry / "cmdline").write_bytes(
++            b"/opt/hbbtv/cefbrowser/cefbrowser --config=/etc/hbbtv/sockets.ini "
++            b"--staticpath=/var/lib/hbbtv/cefbrowser --disable-gpu\0")
++        child = self.process(2216, 1)
++        (child / "cmdline").write_bytes(
++            b"/opt/hbbtv/cefbrowser/cefbrowser --type=gpu-process\0")
++        self.assertEqual(detector.detect(self.proc),
++                         (1946, Path("/var/lib/hbbtv/cefbrowser")))
++
++    def test_invalid_options_do_not_fall_back(self):
++        for args in [["-s"], ["--staticpath="], ["--staticPath", "--disable-gpu"],
++                     ["-s", "/one", "--staticpath=/two"]]:
++            with self.subTest(args=args), self.assertRaises(ValueError):
++                detector.static_argument(["cef", *args])
++
++    def test_pid_one_parent_is_preferred(self):
++        self.process(10, 77, "-s/other")
++        self.process(1946, 1, "-s/expected")
++        self.assertEqual(detector.detect(self.proc)[0], 1946)
++
++    def test_root_without_pid_one_parent(self):
++        self.process(10, 77, "-s/expected")
++        self.process(11, 10, "-s/other")
++        self.assertEqual(detector.detect(self.proc)[0], 10)
++
++    def test_two_independent_roots_fail(self):
++        for parent in [1, 77]:
++            with tempfile.TemporaryDirectory() as directory:
++                old = self.proc
++                self.proc = Path(directory)
++                self.process(10, parent, "-s/a")
++                self.process(11, parent, "-s/b")
++                with self.assertRaises(ValueError):
++                    detector.detect(self.proc)
++                self.proc = old
++
++    def test_children_only_or_no_browser_fail(self):
++        with self.assertRaises(ValueError):
++            detector.detect(self.proc)
++        self.process(10, 1, "--type=renderer")
++        self.process(11, 1, "--type", "utility")
++        with self.assertRaises(ValueError):
++            detector.detect(self.proc)
++
++    def test_unreadable_known_process_fails(self):
++        entry = self.process(10, 1, "-s/expected")
++        (entry / "cmdline").unlink()
++        with self.assertRaises(OSError):
++            detector.detect(self.proc)
++
++    @unittest.skipIf(os.name == "nt", "Linux proc symlinks")
++    def test_executable_fallback_and_relative_path(self):
++        exe = self.proc / "bin/cefbrowser"
++        exe.parent.mkdir()
++        exe.touch()
++        entry = self.process(10, 1)
++        (entry / "exe").symlink_to(exe)
++        self.assertEqual(detector.detect(self.proc)[1], exe.parent)
++        (entry / "cwd").symlink_to(self.proc)
++        (entry / "cmdline").write_bytes(b"cefbrowser\0-s\0static content\0")
++        self.assertEqual(detector.detect(self.proc)[1], self.proc / "static content")
++
++    @unittest.skipIf(os.name == "nt", "Linux Bash installer")
++    def test_installer_detection_and_failure_before_apply(self):
++        tools = self.proc / "tools"
++        tools.mkdir()
++        shutil.copy(ROOT / "tools/install_cefbrowser_zdf_controls_fix.sh", tools)
++        patcher = tools / "apply_cefbrowser_zdf_controls_fix.py"
++        patcher.write_text("from pathlib import Path\nPath(__file__).with_name('called').touch()\n")
++        patcher.chmod(0o755)
++        helper = tools / "detect_cefbrowser_static_root.py"
++        helper.write_text("raise SystemExit(1)\n")
++        command = ["bash", str(tools / "install_cefbrowser_zdf_controls_fix.sh")]
++        result = subprocess.run(command, capture_output=True, text=True)
++        self.assertNotEqual(result.returncode, 0)
++        self.assertFalse((tools / "called").exists())
++        static = self.proc / "static content"
++        for relative in ["js/video_quirks.js", "js/keyhandler.js", "css/videoquirks.css"]:
++            target = static / relative
++            target.parent.mkdir(parents=True, exist_ok=True)
++            target.touch()
++        helper.write_text(f"print({str(static)!r})\n")
++        result = subprocess.run(command, capture_output=True, text=True)
++        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
++        self.assertIn(f"STATIC_ROOT={static}", result.stdout)
++        self.assertTrue((tools / "called").exists())
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_cefbrowser_zdf_static_override.py b/tests/test_cefbrowser_zdf_static_override.py
+new file mode 100755
+index 0000000..9f895d3
+--- /dev/null
++++ b/tests/test_cefbrowser_zdf_static_override.py
+@@ -0,0 +1,111 @@
++#!/usr/bin/env python3
++
++import importlib.util
++from pathlib import Path
++import tempfile
++
++ROOT = Path(__file__).resolve().parents[1]
++PATCHER_PATH = ROOT / "tools" / "apply_cefbrowser_zdf_controls_fix.py"
++
++spec = importlib.util.spec_from_file_location("zdf_static_fix", PATCHER_PATH)
++module = importlib.util.module_from_spec(spec)
++assert spec.loader is not None
++spec.loader.exec_module(module)
++
++VIDEO_QUIRKS = """function _quirk_unhide_element(id, clazz, tagName) {
++    _quirk_remove_class(id, clazz, tagName, 'quirk_hide_element');
++}
++
++function activate_quirks(isStart) {
++    if (false) {
++    } else if (document.location.href.search("-hbbtv.zdf.de") > 0) {
++        if (isStart) {
++            _quirk_hide_element('root', null, null);
++            document.body.style.background = 'transparent';
++            document.getElementsByTagName('html')[0].style.setProperty('background', 'transparent');
++        } else {
++            _quirk_unhide_element('root', null, null);
++            document.body.style.background = '#0d1118';
++            document.getElementsByTagName('html')[0].style.setProperty('background', '#0d1118');
++        }
++    }
++}
++"""
++
++KEYHANDLER = """(() => {
++    window.cefKeyPress = function(keyCode) {
++        // create and dispatch the event (keydown)
++        let keyDownEvent = new KeyboardEvent("keydown", {bubbles: true});
++        document.dispatchEvent(keyDownEvent);
++
++        let keypressEvent = new KeyboardEvent("keypress", {bubbles: true});
++        document.dispatchEvent(keypressEvent);
++
++        let keyUpEvent = new KeyboardEvent("keyup", {bubbles: true});
++        document.dispatchEvent(keyUpEvent);
++    }
++})();
++"""
++
++CSS = """.quirk_hide_element, .quirk_hide_element * {
++    visibility: hidden !important;
++}
++
++.quirk_background_transparent {
++    background: transparent !important;
++}
++"""
++
++
++def write_fixture(root: Path) -> None:
++    (root / "js").mkdir(parents=True)
++    (root / "css").mkdir(parents=True)
++    (root / "js" / "video_quirks.js").write_text(VIDEO_QUIRKS, encoding="utf-8")
++    (root / "js" / "keyhandler.js").write_text(KEYHANDLER, encoding="utf-8")
++    (root / "css" / "videoquirks.css").write_text(CSS, encoding="utf-8")
++
++
++with tempfile.TemporaryDirectory(prefix="vdrsuite-zdf-static-") as directory:
++    root = Path(directory)
++    write_fixture(root)
++
++    assert module.apply(root) == 0
++    assert module.check(root) == 0
++
++    video = (root / "js" / "video_quirks.js").read_text(encoding="utf-8")
++    keys = (root / "js" / "keyhandler.js").read_text(encoding="utf-8")
++    css = (root / "css" / "videoquirks.css").read_text(encoding="utf-8")
++
++    assert "function _quirk_zdf_video_surface(isStart)" in video
++    assert "_quirk_zdf_video_surface(true);" in video
++    assert "_quirk_zdf_video_surface(false);" in video
++    assert "_quirk_hide_element('root', null, null);" not in video
++
++    assert "let keyTarget = document;" in keys
++    assert "document.getElementById('root') || document" in keys
++    assert keys.count("keyTarget.dispatchEvent(") == 3
++    assert "document.dispatchEvent(" not in keys
++
++    assert ".quirk_zdf_video_surface" in css
++    assert ".quirk_zdf_video_ancestor" in css
++
++    first = {
++        path: path.read_text(encoding="utf-8")
++        for path in (
++            root / "js" / "video_quirks.js",
++            root / "js" / "keyhandler.js",
++            root / "css" / "videoquirks.css",
++        )
++    }
++
++    assert module.apply(root) == 0
++
++    for path, content in first.items():
++        assert path.read_text(encoding="utf-8") == content
++
++    assert module.restore(root) == 0
++    assert (root / "js" / "video_quirks.js").read_text(encoding="utf-8") == VIDEO_QUIRKS
++    assert (root / "js" / "keyhandler.js").read_text(encoding="utf-8") == KEYHANDLER
++    assert (root / "css" / "videoquirks.css").read_text(encoding="utf-8") == CSS
++
++print("cefbrowser ZDF static override: patch, idempotency, verification and rollback ok")
+diff --git a/tests/test_vdrsuite_hbbtv_discovery_service.cpp b/tests/test_vdrsuite_hbbtv_discovery_service.cpp
+new file mode 100644
+index 0000000..ff78611
+--- /dev/null
++++ b/tests/test_vdrsuite_hbbtv_discovery_service.cpp
+@@ -0,0 +1,141 @@
++#include "../service/vdrsuite_hbbtv_discovery_service.h"
++
++#include <cassert>
++#include <cstring>
++#include <type_traits>
++
++namespace
++{
++
++void requestChannel(
++    VdrWebHbbtvDiscoveryV1 &request,
++    const char *channelId)
++{
++    request = {};
++    request.structSize = sizeof(request);
++    const std::size_t length = std::strlen(channelId);
++    assert(length < VDRWEB_HBBTV_CHANNEL_ID_MAX);
++    std::memcpy(request.channelId, channelId, length + 1U);
++}
++
++}
++
++int main()
++{
++    static_assert(
++        std::is_standard_layout<VdrWebHbbtvApplicationV1>::value,
++        "application ABI must be standard layout");
++    static_assert(
++        std::is_standard_layout<VdrWebHbbtvDiscoveryV1>::value,
++        "discovery ABI must be standard layout");
++
++    const char *channel = "C-1-1051-10301";
++
++    VdrSuiteHbbtvDiscoveryStore::BeginChannel(channel);
++
++    VdrWebHbbtvDiscoveryV1 empty{};
++    requestChannel(empty, channel);
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(empty));
++    assert(empty.schemaVersion == VDRWEB_HBBTV_SERVICE_SCHEMA_V1);
++    assert(empty.result == VDRWEB_HBBTV_RESULT_NO_APPLICATIONS);
++    assert(empty.receiverActive == 1);
++    assert(empty.applicationCount == 0);
++    const uint64_t emptyRevision = empty.discoveryRevision;
++    assert(emptyRevision != 0);
++
++    VdrSuiteHbbtvDiscoveryStore::Upsert(
++        channel,
++        7,
++        2,
++        5,
++        "ARD HbbTV",
++        "https://example.invalid/",
++        "index.html",
++        "");
++
++    VdrWebHbbtvDiscoveryV1 discovered{};
++    requestChannel(discovered, channel);
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(discovered));
++    assert(discovered.result == VDRWEB_HBBTV_RESULT_OK);
++    assert(discovered.receiverActive == 1);
++    assert(discovered.applicationCount == 1);
++    assert(discovered.discoveryRevision > emptyRevision);
++    assert(discovered.applications[0].applicationId == 7);
++    assert(discovered.applications[0].controlCode == 2);
++    assert(discovered.applications[0].priority == 5);
++    assert(std::strcmp(discovered.applications[0].name, "ARD HbbTV") == 0);
++    assert(std::strcmp(
++        discovered.applications[0].urlBase,
++        "https://example.invalid/") == 0);
++    const uint64_t applicationRevision = discovered.discoveryRevision;
++
++    // VDR may re-announce the same LiveView channel while the
++    // HbbTV application is still active (for example around
++    // video/live-source transitions). That must not manufacture
++    // a new application context.
++    VdrSuiteHbbtvDiscoveryStore::BeginChannel(channel);
++
++    VdrWebHbbtvDiscoveryV1 sameChannel{};
++    requestChannel(sameChannel, channel);
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(sameChannel));
++    assert(sameChannel.result == VDRWEB_HBBTV_RESULT_OK);
++    assert(sameChannel.receiverActive == 1);
++    assert(sameChannel.applicationCount == 1);
++    assert(sameChannel.discoveryRevision == applicationRevision);
++    assert(sameChannel.applications[0].applicationId == 7);
++    assert(std::strcmp(
++        sameChannel.applications[0].name,
++        "ARD HbbTV") == 0);
++
++    VdrSuiteHbbtvDiscoveryStore::Upsert(
++        channel,
++        7,
++        2,
++        5,
++        "ARD HbbTV",
++        "https://example.invalid/",
++        "index.html",
++        "");
++
++    VdrWebHbbtvDiscoveryV1 duplicate{};
++    requestChannel(duplicate, channel);
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(duplicate));
++    assert(duplicate.discoveryRevision == applicationRevision);
++
++    VdrSuiteHbbtvDiscoveryStore::Upsert(
++        channel,
++        7,
++        2,
++        6,
++        "ARD HbbTV",
++        "https://example.invalid/",
++        "index.html",
++        "");
++
++    VdrWebHbbtvDiscoveryV1 changed{};
++    requestChannel(changed, channel);
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(changed));
++    assert(changed.discoveryRevision > applicationRevision);
++    assert(changed.applications[0].priority == 6);
++
++    VdrWebHbbtvDiscoveryV1 mismatch{};
++    requestChannel(mismatch, "C-1-1051-99999");
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(mismatch));
++    assert(mismatch.result == VDRWEB_HBBTV_RESULT_CHANNEL_MISMATCH);
++
++    VdrSuiteHbbtvDiscoveryStore::EndChannel();
++
++    VdrWebHbbtvDiscoveryV1 inactive{};
++    requestChannel(inactive, channel);
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(inactive));
++    assert(inactive.result == VDRWEB_HBBTV_RESULT_RECEIVER_INACTIVE);
++    assert(inactive.receiverActive == 0);
++    assert(inactive.applicationCount == 0);
++
++    VdrWebHbbtvDiscoveryV1 invalid{};
++    invalid.structSize = 1;
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(invalid));
++    assert(invalid.result == VDRWEB_HBBTV_RESULT_INVALID_REQUEST);
++
++    return 0;
++}
+diff --git a/tests/test_vdrsuite_hbbtv_media_service.cpp b/tests/test_vdrsuite_hbbtv_media_service.cpp
+new file mode 100644
+index 0000000..b653408
+--- /dev/null
++++ b/tests/test_vdrsuite_hbbtv_media_service.cpp
+@@ -0,0 +1,186 @@
++#include "service/vdrsuite_hbbtv_media_service.h"
++
++#include <cassert>
++#include <chrono>
++#include <cstdint>
++#include <cstdlib>
++#include <cstring>
++#include <string>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <thread>
++#include <unistd.h>
++#include <vector>
++
++namespace
++{
++VdrWebHbbtvMediaV1 readMedia(const char* sessionId)
++{
++    VdrWebHbbtvMediaV1 message {};
++    message.structSize = sizeof(message);
++    std::strncpy(
++        message.sessionId,
++        sessionId,
++        sizeof(message.sessionId) - 1);
++    assert(VdrSuiteHbbtvMediaStore::Read(message));
++    return message;
++}
++
++int connectSocket(const char* path)
++{
++    const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
++    assert(fd >= 0);
++
++    sockaddr_un address {};
++    address.sun_family = AF_UNIX;
++    std::strncpy(
++        address.sun_path,
++        path,
++        sizeof(address.sun_path) - 1);
++
++    int attempts = 100;
++    while (attempts-- > 0) {
++        if (::connect(
++                fd,
++                reinterpret_cast<sockaddr*>(&address),
++                sizeof(address)) == 0) {
++            return fd;
++        }
++        std::this_thread::sleep_for(
++            std::chrono::milliseconds(10));
++    }
++
++    assert(false);
++    return -1;
++}
++
++std::vector<std::uint8_t> receiveBytes(
++    int fd,
++    std::size_t wanted)
++{
++    std::vector<std::uint8_t> result(wanted);
++    std::size_t offset = 0;
++    while (offset < wanted) {
++        const ssize_t received = ::recv(
++            fd,
++            result.data() + offset,
++            wanted - offset,
++            0);
++        assert(received > 0);
++        offset += static_cast<std::size_t>(received);
++    }
++    return result;
++}
++}
++
++int main()
++{
++    const std::string root =
++        "/tmp/vdrsuite-hbbtv-media-test-" +
++        std::to_string(static_cast<long long>(::getpid()));
++    assert(::setenv(
++        "VDR_SUITE_HBBTV_MEDIA_SOCKET_DIR",
++        root.c_str(),
++        1) == 0);
++
++    VdrSuiteHbbtvMediaStore::BeginSession("session-media");
++
++    auto idle = readMedia("session-media");
++    assert(idle.result == VDRWEB_HBBTV_MEDIA_RESULT_OK);
++    assert(idle.state == VDRWEB_HBBTV_MEDIA_STATE_NONE);
++    assert(idle.mediaRevision == 0);
++    assert(idle.socketPath[0] == '\0');
++
++    assert(VdrSuiteHbbtvMediaStore::BeginVideo("video-info-a"));
++    auto streaming = readMedia("session-media");
++    assert(streaming.result == VDRWEB_HBBTV_MEDIA_RESULT_OK);
++    assert(streaming.state == VDRWEB_HBBTV_MEDIA_STATE_STREAMING);
++    assert(streaming.mediaRevision == 1);
++    assert(streaming.fullscreen == 1);
++    assert(streaming.socketPath[0] != '\0');
++
++    const std::string firstPath(streaming.socketPath);
++    const int firstClient = connectSocket(streaming.socketPath);
++
++    std::vector<std::uint8_t> firstPayload(188U * 2U, 0);
++    firstPayload[0] = 0x47;
++    firstPayload[188] = 0x47;
++    assert(VdrSuiteHbbtvMediaStore::AppendTs(
++        firstPayload.data(),
++        firstPayload.size()));
++    assert(receiveBytes(
++        firstClient,
++        firstPayload.size()) == firstPayload);
++
++    int connectedAttempts = 100;
++    while (connectedAttempts-- > 0) {
++        streaming = readMedia("session-media");
++        if (streaming.consumerConnected == 1)
++            break;
++        std::this_thread::sleep_for(
++            std::chrono::milliseconds(10));
++    }
++    assert(streaming.consumerConnected == 1);
++
++    VdrSuiteHbbtvMediaStore::PauseVideo();
++    auto paused = readMedia("session-media");
++    assert(paused.state == VDRWEB_HBBTV_MEDIA_STATE_PAUSED);
++
++    VdrSuiteHbbtvMediaStore::SetVideoSize(
++        100, 50, 640, 360);
++    auto windowed = readMedia("session-media");
++    assert(windowed.fullscreen == 0);
++    assert(windowed.x == 100);
++    assert(windowed.y == 50);
++    assert(windowed.width == 640);
++    assert(windowed.height == 360);
++
++    VdrSuiteHbbtvMediaStore::ResumeVideo();
++    assert(
++        readMedia("session-media").state ==
++        VDRWEB_HBBTV_MEDIA_STATE_STREAMING);
++
++    assert(VdrSuiteHbbtvMediaStore::ResetVideo("video-info-b"));
++    auto reset = readMedia("session-media");
++    assert(reset.mediaRevision == 2);
++    assert(reset.state == VDRWEB_HBBTV_MEDIA_STATE_STREAMING);
++    assert(std::string(reset.socketPath) != firstPath);
++    ::close(firstClient);
++
++    const int secondClient = connectSocket(reset.socketPath);
++    std::vector<std::uint8_t> secondPayload(188U, 0);
++    secondPayload[0] = 0x47;
++    assert(VdrSuiteHbbtvMediaStore::AppendTs(
++        secondPayload.data(),
++        secondPayload.size()));
++    assert(receiveBytes(
++        secondClient,
++        secondPayload.size()) == secondPayload);
++
++    VdrSuiteHbbtvMediaStore::SetVideoFullscreen();
++    auto fullscreen = readMedia("session-media");
++    assert(fullscreen.fullscreen == 1);
++    assert(fullscreen.x == 0);
++    assert(fullscreen.y == 0);
++    assert(fullscreen.width == 0);
++    assert(fullscreen.height == 0);
++
++    VdrSuiteHbbtvMediaStore::StopVideo();
++    auto stopped = readMedia("session-media");
++    assert(stopped.state == VDRWEB_HBBTV_MEDIA_STATE_STOPPED);
++    assert(stopped.socketPath[0] == '\0');
++    ::close(secondClient);
++
++    auto wrong = readMedia("other-session");
++    assert(
++        wrong.result ==
++        VDRWEB_HBBTV_MEDIA_RESULT_SESSION_MISMATCH);
++
++    VdrSuiteHbbtvMediaStore::EndSession("session-media");
++    auto ended = readMedia("session-media");
++    assert(ended.result == VDRWEB_HBBTV_MEDIA_RESULT_NO_SESSION);
++
++    ::rmdir(root.c_str());
++
++    return 0;
++}
+diff --git a/tests/test_vdrsuite_hbbtv_presentation_service.cpp b/tests/test_vdrsuite_hbbtv_presentation_service.cpp
+new file mode 100644
+index 0000000..268a56a
+--- /dev/null
++++ b/tests/test_vdrsuite_hbbtv_presentation_service.cpp
+@@ -0,0 +1,229 @@
++#include "../service/vdrsuite_hbbtv_presentation_service.h"
++#include "../qoi.h"
++
++#include <cassert>
++#include <cstdint>
++#include <cstring>
++#include <cstdlib>
++#include <string>
++#include <vector>
++
++namespace
++{
++
++template <std::size_t N>
++void copyText(char (&target)[N], const char* value)
++{
++    const std::size_t length = std::strlen(value);
++    assert(length < N);
++    std::memset(target, 0, N);
++    std::memcpy(target, value, length + 1U);
++}
++
++VdrWebHbbtvPresentationV1 request(
++    std::uint8_t operation,
++    const char* sessionId,
++    std::uint64_t revision = 0,
++    std::uint32_t offset = 0)
++{
++    VdrWebHbbtvPresentationV1 message{};
++    message.structSize = sizeof(message);
++    message.operation = operation;
++    message.frameRevision = revision;
++    message.offset = offset;
++    copyText(message.sessionId, sessionId);
++    return message;
++}
++
++}
++
++int main()
++{
++    VdrSuiteHbbtvPresentationStore::EndSession();
++    VdrSuiteHbbtvPresentationStore::BeginSession("session-overlay");
++
++    const std::uint8_t firstPatch[] = {
++        // BGRA red, transparent.
++        0x00, 0x00, 0xff, 0xff,
++        0x9a, 0x2e, 0xfe, 0x00,
++        // BGRA green, blue.
++        0x00, 0xff, 0x00, 0xff,
++        0xff, 0x00, 0x00, 0xff,
++    };
++    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
++        firstPatch, 2, 2, 0, 0, 2, 2));
++
++    auto meta = request(
++        VDRWEB_HBBTV_PRESENTATION_META,
++        "session-overlay");
++    assert(VdrSuiteHbbtvPresentationStore::Read(meta));
++    assert(meta.schemaVersion == VDRWEB_HBBTV_PRESENTATION_SCHEMA_V1);
++    assert(meta.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
++    assert(
++        meta.visibility ==
++        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
++    assert(meta.frameRevision == 1);
++    assert(meta.renderWidth == 2);
++    assert(meta.renderHeight == 2);
++    assert(meta.encodedBytes > 0);
++
++    std::vector<std::uint8_t> encoded;
++    std::uint32_t offset = 0;
++    while (offset < meta.encodedBytes)
++    {
++        auto chunk = request(
++            VDRWEB_HBBTV_PRESENTATION_CHUNK,
++            "session-overlay",
++            meta.frameRevision,
++            offset);
++        assert(VdrSuiteHbbtvPresentationStore::Read(chunk));
++        assert(chunk.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
++        assert(chunk.returnedBytes > 0);
++        encoded.insert(
++            encoded.end(),
++            chunk.data,
++            chunk.data + chunk.returnedBytes);
++        offset += chunk.returnedBytes;
++    }
++    assert(encoded.size() == meta.encodedBytes);
++
++    qoi_desc description{};
++    void* decoded = qoi_decode(
++        encoded.data(),
++        static_cast<int>(encoded.size()),
++        &description,
++        4);
++    assert(decoded != nullptr);
++    assert(description.width == 2);
++    assert(description.height == 2);
++
++    const auto* rgba = static_cast<const std::uint8_t*>(decoded);
++    assert(rgba[0] == 0xff && rgba[1] == 0x00 &&
++           rgba[2] == 0x00 && rgba[3] == 0xff);
++    assert(rgba[4] == 0xfe && rgba[5] == 0x2e &&
++           rgba[6] == 0x9a && rgba[7] == 0x00);
++    assert(rgba[8] == 0x00 && rgba[9] == 0xff &&
++           rgba[10] == 0x00 && rgba[11] == 0xff);
++    assert(rgba[12] == 0x00 && rgba[13] == 0x00 &&
++           rgba[14] == 0xff && rgba[15] == 0xff);
++    free(decoded);
++
++    const std::uint8_t yellow[] = {
++        0x00, 0xff, 0xff, 0xff
++    };
++    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
++        yellow, 2, 2, 1, 0, 1, 1));
++
++    auto changed = request(
++        VDRWEB_HBBTV_PRESENTATION_META,
++        "session-overlay");
++    assert(VdrSuiteHbbtvPresentationStore::Read(changed));
++    assert(changed.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
++    assert(
++        changed.visibility ==
++        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
++    assert(changed.frameRevision == 2);
++
++    const std::uint8_t clearPatch[] = {
++        0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00,
++        0x00, 0x00, 0x00, 0x00,
++    };
++    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
++        clearPatch, 2, 2, 0, 0, 2, 2));
++
++    auto hidden = request(
++        VDRWEB_HBBTV_PRESENTATION_META,
++        "session-overlay");
++    assert(VdrSuiteHbbtvPresentationStore::Read(hidden));
++    assert(hidden.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
++    assert(
++        hidden.visibility ==
++        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN);
++    assert(hidden.frameRevision == 3);
++
++    assert(VdrSuiteHbbtvPresentationStore::BeginClose(
++        "session-overlay", 1000));
++    assert(
++        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
++            "session-overlay", 1001) ==
++        VdrSuiteHbbtvRuntimeCloseConfirmation::Pending);
++
++    const std::uint8_t visibleAgain[] = {
++        0x00, 0x00, 0xff, 0xff
++    };
++    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
++        visibleAgain, 2, 2, 0, 0, 1, 1));
++    assert(
++        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
++            "session-overlay", 1002) ==
++        VdrSuiteHbbtvRuntimeCloseConfirmation::Pending);
++
++    const std::uint8_t clearAgain[] = {
++        0x00, 0x00, 0x00, 0x00
++    };
++    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
++        clearAgain, 2, 2, 0, 0, 1, 1));
++    assert(
++        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
++            "session-overlay", 1003) ==
++        VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed);
++
++    assert(VdrSuiteHbbtvPresentationStore::BeginClose(
++        "session-overlay", 2000));
++    assert(
++        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
++            "session-overlay", 7000) ==
++        VdrSuiteHbbtvRuntimeCloseConfirmation::Failed);
++
++    auto staleChunk = request(
++        VDRWEB_HBBTV_PRESENTATION_CHUNK,
++        "session-overlay",
++        2,
++        0);
++    assert(VdrSuiteHbbtvPresentationStore::Read(staleChunk));
++    assert(
++        staleChunk.result ==
++        VDRWEB_HBBTV_PRESENTATION_RESULT_REVISION_MISMATCH);
++
++    auto wrongSession = request(
++        VDRWEB_HBBTV_PRESENTATION_META,
++        "other-session");
++    assert(VdrSuiteHbbtvPresentationStore::Read(wrongSession));
++    assert(
++        wrongSession.result ==
++        VDRWEB_HBBTV_PRESENTATION_RESULT_SESSION_MISMATCH);
++
++    VdrSuiteHbbtvPresentationStore::EndSession("session-overlay");
++
++    auto ended = request(
++        VDRWEB_HBBTV_PRESENTATION_META,
++        "session-overlay");
++    assert(VdrSuiteHbbtvPresentationStore::Read(ended));
++    assert(
++        ended.result ==
++        VDRWEB_HBBTV_PRESENTATION_RESULT_NO_SESSION);
++
++    // Browser QOI updates must reach the Suite with no local WebOSDPage.
++    VdrSuiteHbbtvPresentationStore::BeginSession("remote-video");
++    const unsigned char pixel[] = {0x11, 0x22, 0x33, 0xff};
++    qoi_desc desc{};
++    desc.width = desc.height = 1;
++    desc.channels = 4;
++    int encodedSize = 0;
++    void* remoteEncoded = qoi_encode(pixel, &desc, &encodedSize);
++    assert(remoteEncoded != nullptr);
++    std::string patch(static_cast<const char*>(remoteEncoded), encodedSize);
++    std::free(remoteEncoded);
++    assert(VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(patch, 2, 2, 1, 1));
++    auto remoteFrame = request(VDRWEB_HBBTV_PRESENTATION_META, "remote-video");
++    assert(VdrSuiteHbbtvPresentationStore::Read(remoteFrame));
++    assert(remoteFrame.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
++    assert(remoteFrame.visibility == VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
++    assert(!VdrSuiteHbbtvPresentationStore::ApplyQoiPatch("invalid", 2, 2, 0, 0));
++    patch[4] = 0x7f;
++    assert(!VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(patch, 2, 2, 0, 0));
++    VdrSuiteHbbtvPresentationStore::EndSession("remote-video");
++    return 0;
++}
+diff --git a/tests/test_vdrsuite_hbbtv_runtime_service.cpp b/tests/test_vdrsuite_hbbtv_runtime_service.cpp
+new file mode 100644
+index 0000000..521b316
+--- /dev/null
++++ b/tests/test_vdrsuite_hbbtv_runtime_service.cpp
+@@ -0,0 +1,487 @@
++#include "../service/vdrsuite_hbbtv_runtime_service.h"
++
++#include <cassert>
++#include <cstring>
++#include <string>
++#include <type_traits>
++
++namespace
++{
++
++void copyText(char *target, std::size_t capacity, const char *value)
++{
++    assert(target != nullptr);
++    assert(value != nullptr);
++    const std::size_t length = std::strlen(value);
++    assert(length < capacity);
++    std::memcpy(target, value, length + 1U);
++}
++
++VdrWebHbbtvRuntimeV1 makeRequest(
++    std::uint8_t operation,
++    const char *sessionId,
++    const char *channelId,
++    std::uint32_t applicationId,
++    std::uint64_t descriptorRevision,
++    std::uint8_t inputAction = VDRWEB_HBBTV_INPUT_NONE)
++{
++    VdrWebHbbtvRuntimeV1 request{};
++    request.structSize = sizeof(request);
++    request.operation = operation;
++    request.inputAction = inputAction;
++    request.applicationId = applicationId;
++    request.descriptorRevision = descriptorRevision;
++    copyText(request.sessionId, VDRWEB_HBBTV_SESSION_ID_MAX, sessionId);
++    copyText(request.channelId, VDRWEB_HBBTV_CHANNEL_ID_MAX, channelId);
++    return request;
++}
++
++std::uint64_t discoveryRevision(const char *channelId)
++{
++    VdrWebHbbtvDiscoveryV1 discovery{};
++    discovery.structSize = sizeof(discovery);
++    copyText(discovery.channelId, VDRWEB_HBBTV_CHANNEL_ID_MAX, channelId);
++    assert(VdrSuiteHbbtvDiscoveryStore::Read(discovery));
++    assert(discovery.schemaVersion == VDRWEB_HBBTV_SERVICE_SCHEMA_V1);
++    assert(discovery.result == VDRWEB_HBBTV_RESULT_OK);
++    assert(discovery.discoveryRevision != 0);
++    return discovery.discoveryRevision;
++}
++
++}
++
++int main()
++{
++    static_assert(
++        std::is_standard_layout<VdrWebHbbtvRuntimeV1>::value,
++        "runtime ABI must be standard layout");
++
++    const char *channel = "C-1-1051-10301";
++
++    VdrSuiteHbbtvDiscoveryStore::EndChannel();
++    VdrSuiteHbbtvDiscoveryStore::BeginChannel(channel);
++    VdrSuiteHbbtvDiscoveryStore::Upsert(
++        channel,
++        1,
++        1,
++        2,
++        "HBBTV-Start",
++        "https://example.invalid/",
++        "start.html",
++        "");
++
++    const std::uint64_t revision = discoveryRevision(channel);
++
++    int launchCount = 0;
++    int closeCount = 0;
++    int inputCount = 0;
++    VdrSuiteHbbtvRuntimeCloseConfirmation closeConfirmation =
++        VdrSuiteHbbtvRuntimeCloseConfirmation::Pending;
++
++    std::string launchedSession;
++    std::string launchedChannel;
++    std::string closedSession;
++    std::string inputSession;
++    std::string inputKey;
++
++    VdrSuiteHbbtvRuntimeHooks hooks;
++    hooks.scheduleLaunch =
++        [&](const std::string& sessionId, const std::string& channelId) {
++            ++launchCount;
++            launchedSession = sessionId;
++            launchedChannel = channelId;
++            return true;
++        };
++    hooks.scheduleClose =
++        [&](const std::string& sessionId) {
++            ++closeCount;
++            closedSession = sessionId;
++            return true;
++        };
++    hooks.closeConfirmation =
++        [&](const std::string& sessionId) {
++            assert(sessionId == "session-a");
++            return closeConfirmation;
++        };
++    hooks.sendInput =
++        [&](const std::string& sessionId, const std::string& key) {
++            ++inputCount;
++            inputSession = sessionId;
++            inputKey = key;
++            return true;
++        };
++
++    VdrSuiteHbbtvRuntimeService runtime(hooks);
++    assert(!runtime.KeepsBrowserAlive());
++
++    auto launch = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_LAUNCH,
++        "session-a",
++        channel,
++        1,
++        revision);
++
++    assert(runtime.Handle(launch));
++    assert(launch.schemaVersion == VDRWEB_HBBTV_RUNTIME_SCHEMA_V1);
++    assert(launch.result == VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
++    assert(launch.state == VDRWEB_HBBTV_RUNTIME_STATE_STARTING);
++    assert(runtime.KeepsBrowserAlive());
++    assert(launchCount == 1);
++    assert(launchedSession == "session-a");
++    assert(launchedChannel == channel);
++
++    auto duplicateLaunch = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_LAUNCH,
++        "session-a",
++        channel,
++        1,
++        revision);
++
++    assert(runtime.Handle(duplicateLaunch));
++    assert(
++        duplicateLaunch.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
++    assert(
++        duplicateLaunch.state ==
++        VDRWEB_HBBTV_RUNTIME_STATE_STARTING);
++    assert(launchCount == 1);
++
++    assert(runtime.CompleteLaunch("session-a", true));
++    // A remote session remains active with no local OSD or cControl/player.
++    assert(runtime.KeepsBrowserAlive());
++
++    auto status = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_STATUS,
++        "session-a",
++        channel,
++        1,
++        revision);
++
++    assert(runtime.Handle(status));
++    assert(status.result == VDRWEB_HBBTV_RUNTIME_RESULT_OK);
++    assert(status.state == VDRWEB_HBBTV_RUNTIME_STATE_ACTIVE);
++
++    auto competingLaunch = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_LAUNCH,
++        "session-b",
++        channel,
++        1,
++        revision);
++
++    assert(runtime.Handle(competingLaunch));
++    assert(
++        competingLaunch.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_BUSY);
++    assert(launchCount == 1);
++
++    auto inputUp = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_INPUT,
++        "session-a",
++        channel,
++        1,
++        revision,
++        VDRWEB_HBBTV_INPUT_UP);
++
++    assert(runtime.Handle(inputUp));
++    assert(inputUp.result == VDRWEB_HBBTV_RUNTIME_RESULT_OK);
++    assert(inputUp.state == VDRWEB_HBBTV_RUNTIME_STATE_ACTIVE);
++    assert(inputCount == 1);
++    assert(inputSession == "session-a");
++    assert(inputKey == "VK_UP");
++
++    auto inputOk = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_INPUT,
++        "session-a",
++        channel,
++        1,
++        revision,
++        VDRWEB_HBBTV_INPUT_OK);
++
++    assert(runtime.Handle(inputOk));
++    assert(inputOk.result == VDRWEB_HBBTV_RUNTIME_RESULT_OK);
++    assert(inputCount == 2);
++    assert(inputKey == "VK_ENTER");
++
++    auto unsupportedInput = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_INPUT,
++        "session-a",
++        channel,
++        1,
++        revision,
++        255);
++
++    assert(runtime.Handle(unsupportedInput));
++    assert(
++        unsupportedInput.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_ACTION_UNSUPPORTED);
++    assert(inputCount == 2);
++
++    VdrSuiteHbbtvDiscoveryStore::Upsert(
++        channel,
++        2,
++        2,
++        5,
++        "Second application",
++        "https://example.invalid/",
++        "second.html",
++        "");
++
++    const std::uint64_t newerRevision = discoveryRevision(channel);
++    assert(newerRevision > revision);
++
++    auto staleInput = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_INPUT,
++        "session-a",
++        channel,
++        1,
++        revision,
++        VDRWEB_HBBTV_INPUT_LEFT);
++
++    assert(runtime.Handle(staleInput));
++    assert(
++        staleInput.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_DISCOVERY_STALE);
++    assert(inputCount == 2);
++
++    auto close = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_CLOSE,
++        "session-a",
++        channel,
++        1,
++        revision);
++
++    assert(runtime.Handle(close));
++    assert(close.result == VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
++    assert(close.state == VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
++    assert(runtime.KeepsBrowserAlive());
++    assert(closeCount == 1);
++    assert(closedSession == "session-a");
++
++    auto closingStatus = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_STATUS,
++        "session-a",
++        channel,
++        1,
++        revision);
++    assert(runtime.Handle(closingStatus));
++    assert(closingStatus.result == VDRWEB_HBBTV_RUNTIME_RESULT_OK);
++    assert(closingStatus.state == VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
++
++    closeConfirmation =
++        VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed;
++
++    auto closedStatus = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_STATUS,
++        "session-a",
++        channel,
++        1,
++        revision);
++    assert(runtime.Handle(closedStatus));
++    assert(
++        closedStatus.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE);
++    assert(closedStatus.state == VDRWEB_HBBTV_RUNTIME_STATE_NONE);
++    assert(!runtime.KeepsBrowserAlive());
++
++    auto afterClose = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_INPUT,
++        "session-a",
++        channel,
++        1,
++        revision,
++        VDRWEB_HBBTV_INPUT_UP);
++
++    assert(runtime.Handle(afterClose));
++    assert(
++        afterClose.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_SESSION_NOT_ACTIVE);
++    assert(inputCount == 2);
++
++    auto staleLaunch = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_LAUNCH,
++        "session-c",
++        channel,
++        1,
++        revision);
++
++    assert(runtime.Handle(staleLaunch));
++    assert(
++        staleLaunch.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_DISCOVERY_STALE);
++    assert(launchCount == 1);
++
++    auto nonLaunchable = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_LAUNCH,
++        "session-d",
++        channel,
++        2,
++        newerRevision);
++
++    assert(runtime.Handle(nonLaunchable));
++    assert(
++        nonLaunchable.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_APPLICATION_NOT_LAUNCHABLE);
++    assert(launchCount == 1);
++
++    {
++        int recoveryLaunchCount = 0;
++        int recoveryCloseCount = 0;
++        VdrSuiteHbbtvRuntimeCloseConfirmation
++            recoveryCloseConfirmation =
++                VdrSuiteHbbtvRuntimeCloseConfirmation::Pending;
++
++        VdrSuiteHbbtvRuntimeHooks recoveryHooks;
++        recoveryHooks.scheduleLaunch =
++            [&](const std::string&, const std::string&) {
++                ++recoveryLaunchCount;
++                return true;
++            };
++        recoveryHooks.scheduleClose =
++            [&](const std::string& sessionId) {
++                ++recoveryCloseCount;
++                assert(sessionId == "session-timeout");
++                return true;
++            };
++        recoveryHooks.closeConfirmation =
++            [&](const std::string& sessionId) {
++                assert(sessionId == "session-timeout");
++                return recoveryCloseConfirmation;
++            };
++
++        VdrSuiteHbbtvRuntimeService recoveryRuntime(
++            recoveryHooks);
++
++        auto recoveryLaunch = makeRequest(
++            VDRWEB_HBBTV_RUNTIME_LAUNCH,
++            "session-timeout",
++            channel,
++            1,
++            newerRevision);
++
++        assert(recoveryRuntime.Handle(recoveryLaunch));
++        assert(
++            recoveryLaunch.result ==
++            VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
++        assert(recoveryLaunchCount == 1);
++        assert(
++            recoveryRuntime.CompleteLaunch(
++                "session-timeout",
++                true));
++
++        auto recoveryClose = makeRequest(
++            VDRWEB_HBBTV_RUNTIME_CLOSE,
++            "session-timeout",
++            channel,
++            1,
++            newerRevision);
++
++        assert(recoveryRuntime.Handle(recoveryClose));
++        assert(
++            recoveryClose.result ==
++            VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
++        assert(
++            recoveryClose.state ==
++            VDRWEB_HBBTV_RUNTIME_STATE_CLOSING);
++        assert(recoveryCloseCount == 1);
++
++        auto pendingReplacement = makeRequest(
++            VDRWEB_HBBTV_RUNTIME_LAUNCH,
++            "session-after-timeout",
++            channel,
++            1,
++            newerRevision);
++
++        assert(recoveryRuntime.Handle(pendingReplacement));
++        assert(
++            pendingReplacement.result ==
++            VDRWEB_HBBTV_RUNTIME_RESULT_BUSY);
++        assert(recoveryLaunchCount == 1);
++
++        recoveryCloseConfirmation =
++            VdrSuiteHbbtvRuntimeCloseConfirmation::Failed;
++
++        auto recoveredReplacement = makeRequest(
++            VDRWEB_HBBTV_RUNTIME_LAUNCH,
++            "session-after-timeout",
++            channel,
++            1,
++            newerRevision);
++
++        assert(recoveryRuntime.Handle(recoveredReplacement));
++        assert(
++            recoveredReplacement.result ==
++            VDRWEB_HBBTV_RUNTIME_RESULT_ACCEPTED);
++        assert(
++            recoveredReplacement.state ==
++            VDRWEB_HBBTV_RUNTIME_STATE_STARTING);
++        assert(recoveryLaunchCount == 2);
++    }
++
++    {
++        int failedLaunchCount = 0;
++
++        VdrSuiteHbbtvRuntimeHooks failedLaunchHooks;
++        failedLaunchHooks.scheduleLaunch =
++            [&](const std::string&, const std::string&) {
++                ++failedLaunchCount;
++                return false;
++            };
++
++        VdrSuiteHbbtvRuntimeService failedLaunchRuntime(
++            failedLaunchHooks);
++
++        auto firstFailedLaunch = makeRequest(
++            VDRWEB_HBBTV_RUNTIME_LAUNCH,
++            "session-launch-failure-a",
++            channel,
++            1,
++            newerRevision);
++
++        assert(failedLaunchRuntime.Handle(firstFailedLaunch));
++        assert(
++            firstFailedLaunch.result ==
++            VDRWEB_HBBTV_RUNTIME_RESULT_RUNTIME_UNAVAILABLE);
++        assert(failedLaunchCount == 1);
++
++        auto secondFailedLaunch = makeRequest(
++            VDRWEB_HBBTV_RUNTIME_LAUNCH,
++            "session-launch-failure-b",
++            channel,
++            1,
++            newerRevision);
++
++        assert(failedLaunchRuntime.Handle(secondFailedLaunch));
++        assert(
++            secondFailedLaunch.result ==
++            VDRWEB_HBBTV_RUNTIME_RESULT_RUNTIME_UNAVAILABLE);
++        assert(failedLaunchCount == 2);
++    }
++
++    VdrSuiteHbbtvDiscoveryStore::Upsert(
++        channel,
++        3,
++        1,
++        3,
++        "Ambiguous start application",
++        "https://example.invalid/",
++        "other-start.html",
++        "");
++
++    const std::uint64_t ambiguousRevision = discoveryRevision(channel);
++
++    auto ambiguousLaunch = makeRequest(
++        VDRWEB_HBBTV_RUNTIME_LAUNCH,
++        "session-e",
++        channel,
++        1,
++        ambiguousRevision);
++
++    assert(runtime.Handle(ambiguousLaunch));
++    assert(
++        ambiguousLaunch.result ==
++        VDRWEB_HBBTV_RUNTIME_RESULT_APPLICATION_NOT_LAUNCHABLE);
++    assert(launchCount == 1);
++
++    VdrSuiteHbbtvDiscoveryStore::EndChannel();
++    return 0;
++}
+diff --git a/tools/apply_cefbrowser_zdf_controls_fix.py b/tools/apply_cefbrowser_zdf_controls_fix.py
+new file mode 100755
+index 0000000..1ddb721
+--- /dev/null
++++ b/tools/apply_cefbrowser_zdf_controls_fix.py
+@@ -0,0 +1,325 @@
++#!/usr/bin/env python3
++"""Apply the pinned VDR-Suite ZDF HbbTV static-content correction to cefbrowser.
++
++This deliberately modifies only static browser assets. It does not patch the
++cefbrowser executable and it refuses unknown source shapes.
++"""
++
++from __future__ import annotations
++
++import argparse
++import hashlib
++import os
++from pathlib import Path
++import shutil
++import sys
++
++PINNED_CEFBROWSER_COMMIT = "d14517be4a7aecfc3ba0b77831af237721ef48e9"
++BACKUP_SUFFIX = ".vdr-suite-zdf-controls.pre-fix"
++
++VIDEO_QUIRKS = Path("js/video_quirks.js")
++KEYHANDLER = Path("js/keyhandler.js")
++VIDEOQUIRKS_CSS = Path("css/videoquirks.css")
++
++ZDF_HELPER_MARKER = "function _quirk_zdf_video_surface(isStart)"
++KEY_TARGET_MARKER = "let keyTarget = document;"
++CSS_VIDEO_MARKER = ".quirk_zdf_video_surface"
++CSS_ANCESTOR_MARKER = ".quirk_zdf_video_ancestor"
++
++HELPER_ANCHOR = """function _quirk_unhide_element(id, clazz, tagName) {
++    _quirk_remove_class(id, clazz, tagName, 'quirk_hide_element');
++}
++"""
++
++HELPER_INSERT = """function _quirk_unhide_element(id, clazz, tagName) {
++    _quirk_remove_class(id, clazz, tagName, 'quirk_hide_element');
++}
++
++function _quirk_zdf_video_surface(isStart) {
++    const videos = document.getElementsByTagName('video');
++
++    for (let i = 0; i < videos.length; ++i) {
++        const video = videos[i];
++
++        if (isStart) {
++            video.classList.add('quirk_zdf_video_surface');
++        } else {
++            video.classList.remove('quirk_zdf_video_surface');
++        }
++
++        let parent = video.parentElement;
++        while (parent !== null && parent !== document.body) {
++            if (isStart) {
++                parent.classList.add('quirk_zdf_video_ancestor');
++            } else {
++                parent.classList.remove('quirk_zdf_video_ancestor');
++            }
++
++            if (parent.id === 'root') {
++                break;
++            }
++            parent = parent.parentElement;
++        }
++    }
++}
++"""
++
++ZDF_START_OLD = """        if (isStart) {
++            _quirk_hide_element('root', null, null);
++            document.body.style.background = 'transparent';
++"""
++ZDF_START_NEW = """        if (isStart) {
++            _quirk_zdf_video_surface(true);
++            document.body.style.background = 'transparent';
++"""
++
++ZDF_STOP_OLD = """        } else {
++            _quirk_unhide_element('root', null, null);
++            document.body.style.background = '#0d1118';
++"""
++ZDF_STOP_NEW = """        } else {
++            _quirk_zdf_video_surface(false);
++            document.body.style.background = '#0d1118';
++"""
++
++KEY_FUNCTION_OLD = """    window.cefKeyPress = function(keyCode) {
++        // create and dispatch the event (keydown)
++"""
++KEY_FUNCTION_NEW = """    window.cefKeyPress = function(keyCode) {
++        let keyTarget = document;
++        if (document.location.href.search("-hbbtv.zdf.de") > 0) {
++            const activeElement = document.activeElement;
++            if (activeElement &&
++                activeElement !== document.body &&
++                activeElement !== document.documentElement) {
++                keyTarget = activeElement;
++            } else {
++                keyTarget = document.getElementById('root') || document;
++            }
++        }
++
++        // create and dispatch the event (keydown)
++"""
++
++CSS_APPEND = """
++/*
++ * VDR-Suite ZDF external-video composition:
++ * keep the HbbTV application/root visible so native controls and focus survive,
++ * hide only the browser's video pixels, and make the video ancestor chain
++ * transparent so the external media plane can show through.
++ */
++.quirk_zdf_video_surface {
++    visibility: hidden !important;
++}
++
++.quirk_zdf_video_ancestor {
++    background: transparent !important;
++}
++"""
++
++
++class PatchError(RuntimeError):
++    pass
++
++
++def digest(text: str) -> str:
++    return hashlib.sha256(text.encode("utf-8")).hexdigest()
++
++
++def replace_once(text: str, old: str, new: str, label: str) -> str:
++    count = text.count(old)
++    if count != 1:
++        raise PatchError(
++            f"{label}: expected exactly one source marker, found {count}"
++        )
++    return text.replace(old, new, 1)
++
++
++def patched_video_quirks(text: str) -> bool:
++    return (
++        ZDF_HELPER_MARKER in text
++        and "_quirk_zdf_video_surface(true);" in text
++        and "_quirk_zdf_video_surface(false);" in text
++        and "_quirk_hide_element('root', null, null);" not in text
++    )
++
++
++def patched_keyhandler(text: str) -> bool:
++    return (
++        KEY_TARGET_MARKER in text
++        and text.count("keyTarget.dispatchEvent(") == 3
++        and text.count("document.dispatchEvent(") == 0
++    )
++
++
++def patched_css(text: str) -> bool:
++    return CSS_VIDEO_MARKER in text and CSS_ANCESTOR_MARKER in text
++
++
++def patch_video_quirks(text: str) -> str:
++    if patched_video_quirks(text):
++        return text
++    text = replace_once(text, HELPER_ANCHOR, HELPER_INSERT, "video_quirks helper")
++    text = replace_once(text, ZDF_START_OLD, ZDF_START_NEW, "ZDF video start")
++    text = replace_once(text, ZDF_STOP_OLD, ZDF_STOP_NEW, "ZDF video stop")
++    if not patched_video_quirks(text):
++        raise PatchError("video_quirks postcondition failed")
++    return text
++
++
++def patch_keyhandler(text: str) -> str:
++    if patched_keyhandler(text):
++        return text
++    text = replace_once(
++        text, KEY_FUNCTION_OLD, KEY_FUNCTION_NEW, "keyhandler target setup"
++    )
++    dispatch_count = text.count("document.dispatchEvent(")
++    if dispatch_count != 3:
++        raise PatchError(
++            f"keyhandler dispatch source count changed: expected 3, found {dispatch_count}"
++        )
++    text = text.replace("document.dispatchEvent(", "keyTarget.dispatchEvent(")
++    if not patched_keyhandler(text):
++        raise PatchError("keyhandler postcondition failed")
++    return text
++
++
++def patch_css(text: str) -> str:
++    if patched_css(text):
++        return text
++    text = text.rstrip() + "\n" + CSS_APPEND.lstrip()
++    if not patched_css(text):
++        raise PatchError("videoquirks.css postcondition failed")
++    return text
++
++
++def target_paths(root: Path) -> dict[Path, callable]:
++    return {
++        root / VIDEO_QUIRKS: patch_video_quirks,
++        root / KEYHANDLER: patch_keyhandler,
++        root / VIDEOQUIRKS_CSS: patch_css,
++    }
++
++
++def read_targets(root: Path) -> dict[Path, str]:
++    values: dict[Path, str] = {}
++    for path in target_paths(root):
++        if not path.is_file():
++            raise PatchError(f"required cefbrowser static file missing: {path}")
++        values[path] = path.read_text(encoding="utf-8")
++    return values
++
++
++def is_fully_patched(values: dict[Path, str], root: Path) -> bool:
++    return (
++        patched_video_quirks(values[root / VIDEO_QUIRKS])
++        and patched_keyhandler(values[root / KEYHANDLER])
++        and patched_css(values[root / VIDEOQUIRKS_CSS])
++    )
++
++
++def stage_and_replace(changes: dict[Path, str]) -> None:
++    staged: list[tuple[Path, Path]] = []
++    try:
++        for path, content in changes.items():
++            tmp = path.with_name(path.name + ".vdr-suite-zdf-controls.tmp")
++            tmp.write_text(content, encoding="utf-8")
++            os.chmod(tmp, path.stat().st_mode)
++            staged.append((path, tmp))
++
++        for path, _ in staged:
++            backup = path.with_name(path.name + BACKUP_SUFFIX)
++            if not backup.exists():
++                shutil.copy2(path, backup)
++
++        for path, tmp in staged:
++            os.replace(tmp, path)
++    finally:
++        for _, tmp in staged:
++            if tmp.exists():
++                tmp.unlink()
++
++
++def apply(root: Path) -> int:
++    root = root.resolve()
++    original = read_targets(root)
++
++    if is_fully_patched(original, root):
++        print(f"CEFBROWSER_ZDF_STATIC_FIX=ALREADY_APPLIED root={root}")
++        return 0
++
++    changes: dict[Path, str] = {}
++    for path, transformer in target_paths(root).items():
++        changes[path] = transformer(original[path])
++
++    if not is_fully_patched(changes, root):
++        raise PatchError("combined postcondition failed before write")
++
++    for path in changes:
++        print(
++            f"PATCH {path}: {digest(original[path])} -> {digest(changes[path])}"
++        )
++
++    stage_and_replace(changes)
++
++    verified = read_targets(root)
++    if not is_fully_patched(verified, root):
++        raise PatchError("post-write verification failed")
++
++    print(
++        "CEFBROWSER_ZDF_STATIC_FIX=PASS "
++        f"upstream={PINNED_CEFBROWSER_COMMIT} root={root}"
++    )
++    return 0
++
++
++def check(root: Path) -> int:
++    root = root.resolve()
++    values = read_targets(root)
++    if not is_fully_patched(values, root):
++        raise PatchError("cefbrowser ZDF static fix is not fully applied")
++    print(
++        "CEFBROWSER_ZDF_STATIC_FIX_CHECK=PASS "
++        f"upstream={PINNED_CEFBROWSER_COMMIT} root={root}"
++    )
++    return 0
++
++
++def restore(root: Path) -> int:
++    root = root.resolve()
++    restored = 0
++    for path in target_paths(root):
++        backup = path.with_name(path.name + BACKUP_SUFFIX)
++        if not backup.is_file():
++            raise PatchError(f"backup missing: {backup}")
++        tmp = path.with_name(path.name + ".vdr-suite-zdf-controls.restore.tmp")
++        shutil.copy2(backup, tmp)
++        os.replace(tmp, path)
++        restored += 1
++    print(f"CEFBROWSER_ZDF_STATIC_FIX_RESTORE=PASS files={restored} root={root}")
++    return 0
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--root", required=True, help="cefbrowser static-content root")
++    mode = parser.add_mutually_exclusive_group(required=True)
++    mode.add_argument("--apply", action="store_true")
++    mode.add_argument("--check", action="store_true")
++    mode.add_argument("--restore", action="store_true")
++    args = parser.parse_args()
++
++    try:
++        root = Path(args.root)
++        if args.apply:
++            return apply(root)
++        if args.check:
++            return check(root)
++        return restore(root)
++    except (OSError, PatchError) as error:
++        print(f"CEFBROWSER_ZDF_STATIC_FIX=FAIL reason={error}", file=sys.stderr)
++        return 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tools/detect_cefbrowser_static_root.py b/tools/detect_cefbrowser_static_root.py
+new file mode 100644
+index 0000000..9f12596
+--- /dev/null
++++ b/tools/detect_cefbrowser_static_root.py
+@@ -0,0 +1,85 @@
++#!/usr/bin/env python3
++"""Resolve a running cefbrowser's static root without selecting CEF children."""
++
++from pathlib import Path
++import posixpath
++import shlex
++import sys
++
++
++def static_argument(argv):
++    values = []
++    index = 1
++    while index < len(argv):
++        arg = argv[index]
++        if arg in ("--staticPath", "--staticpath", "-s"):
++            index += 1
++            if index == len(argv) or not argv[index] or argv[index].startswith("-"):
++                raise ValueError("static path option has no value")
++            values.append(argv[index])
++        elif arg.startswith(("--staticPath=", "--staticpath=")):
++            values.append(arg.split("=", 1)[1])
++        elif arg.startswith("-s") and len(arg) > 2:
++            values.append(arg[2:])
++        index += 1
++    if any(not value for value in values) or len(set(values)) > 1:
++        raise ValueError("empty or conflicting static path options")
++    return values[0] if values else None
++
++
++def detect(proc=Path("/proc")):
++    processes = {}
++    for entry in proc.iterdir():
++        if not entry.name.isdecimal():
++            continue
++        try:
++            if (entry / "comm").read_text().strip() != "cefbrowser":
++                continue
++        except FileNotFoundError:
++            continue
++        # Unreadable or disappearing known browser processes must fail closed.
++        argv = (entry / "cmdline").read_bytes().decode(errors="surrogateescape").split("\0")
++        if argv and argv[-1] == "":
++            argv.pop()
++        if not argv or not argv[0]:
++            raise ValueError("empty cefbrowser command line")
++        # CEF rewrites /proc/cmdline as one space-separated process title.
++        # Normal NUL-separated argv must retain spaces inside argument values.
++        if len(argv) == 1 and " " in argv[0]:
++            argv = shlex.split(argv[0])
++        if any(arg == "--type" or arg.startswith("--type=") for arg in argv[1:]):
++            continue
++        status = (entry / "status").read_text()
++        parent = next(int(line.split()[1]) for line in status.splitlines()
++                      if line.startswith("PPid:"))
++        processes[int(entry.name)] = (parent, argv, entry)
++    roots = [pid for pid, (parent, _, _) in processes.items() if parent not in processes]
++    adopted = [pid for pid in roots if processes[pid][0] == 1]
++    candidates = adopted or roots
++    if len(candidates) != 1:
++        raise ValueError("no unique cefbrowser main process (without --type)")
++    pid = candidates[0]
++    _, argv, entry = processes[pid]
++    value = static_argument(argv)
++    if value is None:
++        root = (entry / "exe").resolve(strict=True).parent
++    else:
++        root = Path(value)
++        if not posixpath.isabs(value):
++            root = (entry / "cwd").resolve(strict=True) / root
++    return pid, root
++
++
++def main():
++    try:
++        pid, root = detect()
++        print(f"CEFBROWSER_MAIN_PID={pid}", file=sys.stderr)
++        print(root)
++        return 0
++    except (OSError, ValueError, StopIteration) as error:
++        print(f"STOP: cefbrowser static root detection failed: {error}", file=sys.stderr)
++        return 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tools/install_cefbrowser_zdf_controls_fix.sh b/tools/install_cefbrowser_zdf_controls_fix.sh
+new file mode 100755
+index 0000000..1792e02
+--- /dev/null
++++ b/tools/install_cefbrowser_zdf_controls_fix.sh
+@@ -0,0 +1,65 @@
++#!/bin/bash
++
++SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
++PATCHER="$SCRIPT_DIR/apply_cefbrowser_zdf_controls_fix.py"
++STATIC_ROOT="$1"
++CONTINUE=1
++
++echo "=== VDR-Suite / cefbrowser ZDF Controls+Input Static Fix ==="
++
++if test ! -x "$PATCHER"; then
++    echo "STOP: patcher fehlt oder ist nicht ausführbar: $PATCHER"
++    CONTINUE=0
++fi
++
++if test "$CONTINUE" = "1" && test -z "$STATIC_ROOT"; then
++    STATIC_ROOT="$(python3 "$SCRIPT_DIR/detect_cefbrowser_static_root.py")"
++    if test "$?" != "0"; then
++        CONTINUE=0
++    fi
++fi
++
++if test "$CONTINUE" = "1"; then
++    echo "STATIC_ROOT=$STATIC_ROOT"
++
++    if test ! -f "$STATIC_ROOT/js/video_quirks.js"         || test ! -f "$STATIC_ROOT/js/keyhandler.js"         || test ! -f "$STATIC_ROOT/css/videoquirks.css"; then
++        echo "STOP: static root enthält nicht die erwarteten cefbrowser-Dateien"
++        CONTINUE=0
++    fi
++fi
++
++if test "$CONTINUE" = "1"; then
++    python3 "$PATCHER" --root "$STATIC_ROOT" --apply
++    RC=$?
++
++    if test "$RC" != "0"; then
++        echo "STOP: Static-Fix konnte nicht sicher angewendet werden"
++        CONTINUE=0
++    fi
++fi
++
++if test "$CONTINUE" = "1"; then
++    python3 "$PATCHER" --root "$STATIC_ROOT" --check
++    RC=$?
++
++    if test "$RC" != "0"; then
++        echo "STOP: Verifikation des Static-Fix fehlgeschlagen"
++        CONTINUE=0
++    fi
++fi
++
++if test "$CONTINUE" = "1"; then
++    echo
++    echo "============================================"
++    echo "CEFBROWSER_ZDF_CONTROLS_INPUT_INSTALL=PASS"
++    echo "STATIC_ROOT=$STATIC_ROOT"
++    echo "============================================"
++    echo
++    echo "Kein VDR-, Daemon- oder cefbrowser-Neustart wurde ausgeführt."
++    echo "Eine bereits geladene HbbTV-Seite benutzt noch die alten Skripte."
++    echo "HbbTV daher sauber beenden und anschließend frisch starten."
++fi
++
++if test "$CONTINUE" != "1"; then
++    exit 1
++fi

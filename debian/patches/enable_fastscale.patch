@@ -1,0 +1,13 @@
+Index: vdr-plugin-web-0.0.1+git20250723-108-5a437fe/Makefile
+===================================================================
+--- vdr-plugin-web-0.0.1+git20250723-108-5a437fe.orig/Makefile	2025-07-23 11:36:31.545303950 +0200
++++ vdr-plugin-web-0.0.1+git20250723-108-5a437fe/Makefile	2025-07-23 11:36:31.541304017 +0200
+@@ -23,7 +23,7 @@
+ 
+ # Enable fast image scaling by Output device
+ # Needs a VDR patch and a patch for the desired output device
+-ENABLE_FAST_SCALE ?= 0
++ENABLE_FAST_SCALE ?= 1
+ 
+ mINI_DIR = thirdparty/mINI-0.9.14
+ 

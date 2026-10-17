@@ -1,0 +1,32 @@
+name: HbbTV — Seahawk quilt source validation
+on:
+  push:
+    branches: ['work/packaging-seahawk-quilt-noble-20261017']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  noble-quilt-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check bash syntax
+        run: bash -n packaging/seahawk/prepare-source.sh
+      - name: Create and verify Debian source package
+        run: |
+          bash packaging/seahawk/prepare-source.sh "$RUNNER_TEMP/vdr-web-quilt-noble"
+          cd "$RUNNER_TEMP/vdr-web-quilt-noble/verified"
+          python3 tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
+          python3 tests/test_cefbrowser_process_detection.py
+          python3 tests/test_cefbrowser_zdf_static_override.py
+      - name: Upload source artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vdr-plugin-web-seahawk-quilt-noble-source
+          path: |
+            ${{ runner.temp }}/vdr-web-quilt-noble/*.dsc
+            ${{ runner.temp }}/vdr-web-quilt-noble/*.orig.tar.gz
+            ${{ runner.temp }}/vdr-web-quilt-noble/*.debian.tar.bz2
+          if-no-files-found: error

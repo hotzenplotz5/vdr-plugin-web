@@ -1,0 +1,5 @@
+enable_fastscale.patch
+0001-vdrsuite-hbbtv-discovery.patch
+0002-vdrsuite-hbbtv-session-runtime.patch
+0003-vdrsuite-hbbtv-presentation-media.patch
+0004-vdrsuite-hbbtv-tests-and-cef-tools.patch
