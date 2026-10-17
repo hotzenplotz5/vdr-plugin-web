@@ -1184,3 +1184,4 @@ index b13a600..fc6b723 100644
 +
      bool retValue = scaleAndPaint(static_cast<uint8_t *>(image), render_width, render_height, x, y, (int)desc.width, (int)desc.height);
      free(image);
+ 
