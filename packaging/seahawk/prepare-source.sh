@@ -78,7 +78,7 @@ entry=(f'vdr-plugin-web ({version}) {series}; urgency=medium\n\n'
        '  * Add VDR-Suite HbbTV services as quilt patches.\n'
        '  * Preserve Seahawk fastscale patch and original Debian packaging.\n'
        '  * Add VDR ABI dependency and opt-in CEF correction tools.\n\n'
-       f' -- VDR-Suite contributors <noreply@github.com>  {stamp}\n\n')
+       f' -- hotzenplotz5 <hotzenplotz5@gmx.de>  {stamp}\n\n')
 changelog.write_text(entry+changelog.read_text())
 (root/'debian/README.vdrsuite').write_text(
   'Experimental standalone source packaging on Seahawk original.\n'
