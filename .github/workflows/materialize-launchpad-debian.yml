@@ -89,7 +89,7 @@ jobs:
           git add debian/
           # Seahawk's historical Debian metadata contains existing trailing whitespace.
           # Preserve the original packaging rather than rewriting unrelated lines.
-          git -c core.whitespace=-blank-at-eol diff --cached --check
+          git -c core.whitespace=-blank-at-eol,-blank-at-eof diff --cached --check
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m 'packaging: materialize Seahawk quilt Debian source in fork'
