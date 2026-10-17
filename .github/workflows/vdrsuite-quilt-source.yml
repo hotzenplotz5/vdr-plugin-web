@@ -117,6 +117,7 @@ jobs:
           dpkg-query -W -f='${Provides}\n' vdr | grep -Fw 'vdr-abi-2.8.3-0yavdr'
           echo 'RESOLUTE_VDR_ABI_PREFLIGHT=PASS'
       - name: Build and test package using non-root user
+        shell: bash
         run: |
           set -Eeuo pipefail
           useradd --create-home --shell /bin/bash vdr-ci
