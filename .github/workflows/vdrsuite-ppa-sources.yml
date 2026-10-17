@@ -1,0 +1,57 @@
+name: PPA source uploads — Noble and Resolute
+on:
+  push:
+    branches: ['work/packaging-seahawk-quilt-noble-20261017']
+    paths:
+      - .github/workflows/vdrsuite-ppa-sources.yml
+      - packaging/seahawk/**
+      - debian/patches/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unsigned-ppa-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        series: [noble, resolute]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare signed-by-maintainer source upload files
+        shell: bash
+        env:
+          SERIES: ${{ matrix.series }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          test "$(id -u)" -ne 0
+          bash packaging/seahawk/prepare-source.sh "$RUNNER_TEMP/vdr-plugin-web-$SERIES" "$SERIES"
+          cd "$RUNNER_TEMP/vdr-plugin-web-$SERIES/verified"
+          test "$(dpkg-parsechangelog -S Distribution)" = "$SERIES"
+          test "$(dpkg-parsechangelog -S Source)" = vdr-plugin-web
+          dpkg-buildpackage -S -sa -us -uc -nc -d
+          parent="$RUNNER_TEMP/vdr-plugin-web-$SERIES"
+          changes="$(find "$parent" -maxdepth 1 -name '*_source.changes' -print -quit)"
+          test -n "$changes" && test -s "$changes"
+          grep -Fx "Distribution: $SERIES" "$changes"
+          grep -Fx 'Architecture: source' "$changes"
+          grep -Fx 'Source: vdr-plugin-web' "$changes"
+          grep -Fx 'Format: 3.0 (quilt)' "$parent"/vdr-plugin-web_*.dsc
+          mkdir -p "$GITHUB_WORKSPACE/ppa-source-$SERIES"
+          cp "$parent"/vdr-plugin-web_*.dsc "$parent"/vdr-plugin-web_*.orig.tar.gz \
+             "$parent"/vdr-plugin-web_*.debian.tar.bz2 "$changes" \
+             "$GITHUB_WORKSPACE/ppa-source-$SERIES/"
+          test "$(find "$GITHUB_WORKSPACE/ppa-source-$SERIES" -maxdepth 1 -type f | wc -l)" -eq 4
+          echo "PPA_SOURCE_$SERIES=PASS"
+          echo 'UNSIGNED=YES NO_PPA_UPLOAD=YES'
+      - name: Upload prepared Debian source files
+        uses: actions/upload-artifact@v4
+        with:
+          name: vdr-plugin-web-ppa-source-${{ matrix.series }}
+          path: ppa-source-${{ matrix.series }}/*
+          if-no-files-found: error
+          retention-days: 7
