@@ -45,7 +45,10 @@ jobs:
           cp "$parent"/vdr-plugin-web_*.dsc "$parent"/vdr-plugin-web_*.orig.tar.gz \
              "$parent"/vdr-plugin-web_*.debian.tar.bz2 "$changes" \
              "$GITHUB_WORKSPACE/ppa-source-$SERIES/"
-          test "$(find "$GITHUB_WORKSPACE/ppa-source-$SERIES" -maxdepth 1 -type f | wc -l)" -eq 4
+          find "$GITHUB_WORKSPACE/ppa-source-$SERIES" -maxdepth 1 -type f -printf "SOURCE_FILE=%f\n"
+          file_count="$(find "$GITHUB_WORKSPACE/ppa-source-$SERIES" -maxdepth 1 -type f | wc -l)"
+          echo "SOURCE_FILE_COUNT=$file_count"
+          test "$file_count" -eq 4
           echo "PPA_SOURCE_$SERIES=PASS"
           echo 'UNSIGNED=YES NO_PPA_UPLOAD=YES'
       - name: Upload prepared Debian source files
