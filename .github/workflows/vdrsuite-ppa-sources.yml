@@ -42,8 +42,10 @@ jobs:
           grep -Fx 'Source: vdr-plugin-web' "$changes"
           grep -Fx 'Format: 3.0 (quilt)' "$parent"/vdr-plugin-web_*.dsc
           mkdir -p "$GITHUB_WORKSPACE/ppa-source-$SERIES"
-          cp "$parent"/vdr-plugin-web_*.dsc "$parent"/vdr-plugin-web_*.orig.tar.gz \
-             "$parent"/vdr-plugin-web_*.debian.tar.bz2 "$changes" \
+          version="$(dpkg-parsechangelog -S Version)"
+          cp "$parent/vdr-plugin-web_$version.dsc" \
+             "$parent/vdr-plugin-web_0.0.1+git20260827-111-34ded50.orig.tar.gz" \
+             "$parent/vdr-plugin-web_$version.debian.tar.bz2" "$changes" \
              "$GITHUB_WORKSPACE/ppa-source-$SERIES/"
           find "$GITHUB_WORKSPACE/ppa-source-$SERIES" -maxdepth 1 -type f -printf "SOURCE_FILE=%f\n"
           file_count="$(find "$GITHUB_WORKSPACE/ppa-source-$SERIES" -maxdepth 1 -type f | wc -l)"
