@@ -1,0 +1,95 @@
+name: Materialize verified Seahawk Debian packaging in Git fork
+on:
+  push:
+    branches: [work/launchpad-debian-quilt-20261017]
+    paths: [.github/workflows/materialize-launchpad-debian.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Retrieve and verify Seahawk packaging
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git branch --show-current)" = work/launchpad-debian-quilt-20261017
+          test -z "$(git status --porcelain)"
+          tmp="$(mktemp -d -p "$RUNNER_TEMP" vdrweb-XXXXXXXX)"
+          orig='0.0.1+git20260827-111-34ded50'
+          version="$orig-1yavdr1~resolute"
+          root="https://launchpad.net/~seahawk1986-hotmail/+archive/ubuntu/vdr-2.8.3/+sourcefiles/vdr-plugin-web/$version"
+          curl -fsSL --retry 3 "$root/vdr-plugin-web_$orig.orig.tar.gz" -o "$tmp/orig.tar.gz"
+          curl -fsSL --retry 3 "$root/vdr-plugin-web_$version.debian.tar.bz2" -o "$tmp/debian.tar.bz2"
+          printf '%s  %s\n' \
+            '7396b7a3c6c97d1de50beb42ff4f8aa54a3e06ae4c8046cddad000f930f550a9' "$tmp/orig.tar.gz" \
+            '7e49fc1f653db0673edb8ef50e29b2bcb4d71de99944a6dacc87164a2850ec9c' "$tmp/debian.tar.bz2" | sha256sum -c
+          tar -xjf "$tmp/debian.tar.bz2" -C "$tmp"
+          test -f "$tmp/debian/rules"
+          test -f "$tmp/debian/patches/fix_thrift-services_ftbs.patch"
+          test -s debian/patches/0001-vdrsuite-hbbtv-discovery.patch
+          cp -a "$tmp/debian/." debian/
+          cp "$tmp/orig.tar.gz" ../vdr-plugin-web_0.0.1+git20260827-111-34ded50.orig.tar.gz
+      - name: Complete Debian quilt source package metadata
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('debian/control')
+          s=p.read_text()
+          old='Depends: ${shlibs:Depends}, ${misc:Depends}'
+          assert s.count(old)==1
+          p.write_text(s.replace(old,old+', ${vdr:Depends}'))
+          p=Path('debian/install')
+          assert p.read_text().strip()=='config/sockets.ini etc/vdr/'
+          p.write_text(p.read_text().rstrip('\n')+'\n'+
+            'tools/apply_cefbrowser_zdf_controls_fix.py usr/share/vdr-plugin-web/vdr-suite-tools/\n'+
+            'tools/detect_cefbrowser_static_root.py usr/share/vdr-plugin-web/vdr-suite-tools/\n'+
+            'tools/install_cefbrowser_zdf_controls_fix.sh usr/share/vdr-plugin-web/vdr-suite-tools/\n')
+          patches=['enable_fastscale.patch','fix_thrift-services_ftbs.patch',
+            '0001-vdrsuite-hbbtv-discovery.patch','0002-vdrsuite-hbbtv-session-runtime.patch',
+            '0003-vdrsuite-hbbtv-presentation-media.patch','0004-vdrsuite-hbbtv-tests-and-cef-tools.patch']
+          for name in patches:
+            assert (Path('debian/patches')/name).is_file(), name
+          Path('debian/patches/series').write_text('\n'.join(patches)+'\n')
+          p=Path('debian/changelog')
+          p.write_text(
+            'vdr-plugin-web (0.0.1+git20260827-111-34ded50-1yavdr1+vdrsuite1) unstable; urgency=medium\n\n'
+            '  * Preserve Seahawk Debian packaging and original patches.\n'
+            '  * Ship VDR-Suite HbbTV integration as quilt patches.\n'
+            '  * Enable Seahawk Thrift compatibility fix and VDR ABI dependency.\n\n'
+            ' -- hotzenplotz5 <hotzenplotz5@gmx.de>  Sat, 17 Oct 2026 10:15:00 +0000\n\n'
+            +p.read_text())
+          Path('debian/README.source').write_text(
+            'This source uses Debian format 3.0 (quilt), retaining Seahawk\n'
+            'packaging patches and adding VDR-Suite HbbTV runtime patches.\n')
+          p=Path('debian/source/options')
+          p.write_text(p.read_text().rstrip('\n')+'\n'+
+            'extend-diff-ignore = "(^|/)(\\.github|packaging)(/|$)"\n')
+          PY
+          test "$(dpkg-parsechangelog -S Source)" = vdr-plugin-web
+          test "$(dpkg-parsechangelog -S Distribution)" = unstable
+      - name: Verify source package and then commit within fork
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          dpkg-source -b .
+          dsc='../vdr-plugin-web_0.0.1+git20260827-111-34ded50-1yavdr1+vdrsuite1.dsc'
+          test -s "$dsc"
+          tmp="$(mktemp -d -p "$RUNNER_TEMP" vdrverify-XXXXXXXX)"
+          dpkg-source -x "$dsc" "$tmp/src"
+          test -f "$tmp/src/service/vdrsuite_hbbtv_media_service.cpp"
+          grep -Fq 'ENABLE_FAST_SCALE ?= 1' "$tmp/src/Makefile"
+          git add debian/
+          git diff --cached --check
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'packaging: materialize Seahawk quilt Debian source in fork'
+          git push origin HEAD:refs/heads/work/launchpad-debian-quilt-20261017
+          echo 'GIT_DEBIAN_PACKAGING=PASS'
