@@ -30,3 +30,51 @@ jobs:
             ${{ runner.temp }}/vdr-web-quilt-noble/*.orig.tar.gz
             ${{ runner.temp }}/vdr-web-quilt-noble/*.debian.tar.bz2
           if-no-files-found: error
+
+  noble-amd64-binaries:
+    needs: noble-quilt-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Seahawk VDR 2.8.3 and install build dependencies
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends software-properties-common
+          sudo add-apt-repository -y ppa:seahawk1986-hotmail/vdr-2.8.3
+          sudo apt-get update
+          apt-cache policy vdr-dev
+          sudo apt-get install -y --no-install-recommends \
+            build-essential debhelper dpkg-dev pkg-config gettext \
+            libgraphicsmagick++1-dev libboost-all-dev libthrift-dev \
+            vdr-dev python3
+          vdr_version="$(dpkg-query -W -f='${Version}' vdr-dev)"
+          case "$vdr_version" in
+            2.8.3-*) echo "SEAHAWK_VDR_DEV=PASS $vdr_version" ;;
+            *) echo "SEAHAWK_VDR_DEV=FAIL $vdr_version"; exit 1 ;;
+          esac
+          test "$(pkg-config --modversion vdr)" = '2.8.3'
+          echo "VDR_API=$(pkg-config --variable=apiversion vdr)"
+      - name: Compile provider tests and binary packages
+        run: |
+          set -Eeuo pipefail
+          bash packaging/seahawk/prepare-source.sh "$RUNNER_TEMP/vdr-web-binary-noble"
+          cd "$RUNNER_TEMP/vdr-web-binary-noble/verified"
+          dpkg-checkbuilddeps -B
+          make test-vdrsuite-hbbtv
+          dpkg-buildpackage -b -us -uc
+          test -s ../vdr-plugin-web_*_amd64.deb
+          echo 'BINARY_BUILD=PASS'
+          dpkg-deb --field ../vdr-plugin-web_*_amd64.deb Package Version Depends
+          dpkg-deb --field ../vdr-plugin-web_*_amd64.deb Depends | grep -Fq 'vdr-abi-2.8.3-0yavdr'
+          echo 'VDR_ABI_DEPENDENCY=PASS'
+          dpkg-deb --contents ../vdr-plugin-web_*_amd64.deb | grep -F 'libvdr-web.so.'
+          echo 'VDR_PLUGIN_BINARY_PAYLOAD=PASS'
+      - name: Upload unsigned amd64 debs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vdr-plugin-web-seahawk-quilt-noble-amd64
+          path: ${{ runner.temp }}/vdr-web-binary-noble/vdr-plugin-web_*_amd64.deb
+          if-no-files-found: error
