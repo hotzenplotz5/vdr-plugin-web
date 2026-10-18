@@ -1,0 +1,122 @@
+name: VDR-Suite HbbTV integrated Debian source and binary (Noble / Resolute)
+
+on:
+  pull_request:
+    paths:
+      - 'debian/**'
+      - 'packaging/**'
+      - '.github/workflows/vdrsuite-integrated-debian-source.yml'
+      - 'Makefile'
+      - 'service/**'
+      - 'thrift-services/**'
+      - 'tools/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  merged-tree-quilt-and-binary:
+    name: 'Integrated HbbTV source & binary: ${{ matrix.series }}'
+    runs-on: ubuntu-24.04
+    container:
+      image: ${{ matrix.image }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - series: noble
+            image: ubuntu:24.04
+            vdr_version: 2.8.3-0yavdr0~noble
+          - series: resolute
+            image: ubuntu:26.04
+            vdr_version: 2.8.3-0yavdr0~resolute
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      SERIES: ${{ matrix.series }}
+      EXPECTED_VDR: ${{ matrix.vdr_version }}
+    steps:
+      - name: Disposable Ubuntu container, no automatic service activation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          . /etc/os-release
+          test "$VERSION_CODENAME" = "$SERIES"
+          test "$(dpkg --print-architecture)" = amd64
+          printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d
+          chmod 0755 /usr/sbin/policy-rc.d
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git curl gnupg software-properties-common
+          add-apt-repository -y ppa:seahawk1986-hotmail/vdr-2.8.3
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential debhelper dpkg-dev pkg-config gettext \
+            libgraphicsmagick++1-dev libboost-all-dev libthrift-dev \
+            vdr vdr-dev python3
+          test "$(dpkg-query -W -f='${Version}' vdr-dev)" = "$EXPECTED_VDR"
+          test "$(dpkg-query -W -f='${Version}' vdr)" = "$EXPECTED_VDR"
+          test "$(pkg-config --modversion vdr)" = 2.8.3
+          test "$(pkg-config --variable=apiversion vdr)" = 14
+          echo "INTEGRATED_WEB_VDR_ABI=PASS series=$SERIES"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify only compatibility patches are active on integrated HbbTV checkout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s service/vdrsuite_hbbtv_discovery_service.h
+          test -s service/vdrsuite_hbbtv_runtime_service.h
+          test -s service/vdrsuite_hbbtv_media_service.cpp
+          test -s service/vdrsuite_hbbtv_presentation_service.cpp
+          test -s tools/apply_cefbrowser_zdf_controls_fix.py
+          test -f debian/patches/0001-vdrsuite-hbbtv-discovery.patch
+          test -f debian/patches/0002-vdrsuite-hbbtv-session-runtime.patch
+          test -f debian/patches/0003-vdrsuite-hbbtv-presentation-media.patch
+          test -f debian/patches/0004-vdrsuite-hbbtv-tests-and-cef-tools.patch
+          sed '/^[[:space:]]*#/d;/^[[:space:]]*$/d' debian/patches/series |
+            diff -u - <(printf '%s\n' enable_fastscale.patch fix_thrift-services_ftbs.patch)
+          test "$(cat debian/source/format)" = '3.0 (quilt)'
+          echo 'INTEGRATED_HBBTV_NO_DUPLICATE_QUILT=PASS'
+      - name: Create exact-source orig fixture, roundtrip Debian DSC and build as unprivileged user
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          useradd --create-home --shell /bin/bash vdr-ci
+          stage="$(mktemp -d /tmp/vdr-plugin-web-dsc-XXXXXXXX)"
+          chown vdr-ci:vdr-ci "$stage"
+          runuser -u vdr-ci -- bash -c '
+            set -Eeuo pipefail
+            stage="$1"
+            repo="$2"
+            upstream="$(dpkg-parsechangelog -l "$repo/debian/changelog" -S Version |
+              sed -E "s/-[^-]+$//")"
+            test -n "$upstream"
+            src="$stage/vdr-plugin-web-$upstream"
+            mkdir -p "$src"
+            tar --exclude="./.git" -C "$repo" -cf - . | tar -C "$src" -xf -
+            tar -C "$stage" --exclude="vdr-plugin-web-$upstream/debian" \
+              -czf "$stage/vdr-plugin-web_${upstream}.orig.tar.gz" "vdr-plugin-web-$upstream"
+            dpkg-source -b "$src"
+            dsc="$(find "$stage" -maxdepth 1 -name "vdr-plugin-web_*.dsc" -print -quit)"
+            test -n "$dsc"
+            dpkg-source -x "$dsc" "$stage/verified"
+            cd "$stage/verified"
+            test -s service/vdrsuite_hbbtv_media_service.cpp
+            test -s service/vdrsuite_hbbtv_runtime_service.h
+            grep -Fq "ENABLE_FAST_SCALE ?= 1" Makefile
+            grep -Fq "GlobalOutput.setOutputFunction" thrift-services/src-client/BrowserClient.cpp
+            make test-vdrsuite-hbbtv
+            dpkg-checkbuilddeps -B
+            dpkg-buildpackage -b -us -uc
+          ' _ "$stage" "$GITHUB_WORKSPACE"
+          deb="$(find "$stage" -maxdepth 1 -name 'vdr-plugin-web_*_amd64.deb' -print -quit)"
+          test -n "$deb" && test -s "$deb"
+          test "$(dpkg-deb --field "$deb" Package)" = vdr-plugin-web
+          dpkg-deb --field "$deb" Depends | grep -F 'vdr-abi-2.8.3-0yavdr'
+          dpkg-deb --contents "$deb" | grep -F 'libvdr-web.so.14'
+          dpkg-deb --contents "$deb" | grep -F 'vdr-suite-tools/apply_cefbrowser_zdf_controls_fix.py'
+          echo "INTEGRATED_HBBTV_DEBIAN_DSC_BINARY=PASS series=$SERIES"
+          echo 'SOURCE_TARBALL_PROVENANCE=CI_FIXTURE_NOT_LAUNCHPAD_RECIPE'
