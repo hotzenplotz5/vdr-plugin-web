@@ -52,7 +52,7 @@ jobs:
           add-apt-repository -y ppa:seahawk1986-hotmail/vdr-2.8.3
           apt-get update
           apt-get install -y --no-install-recommends \
-            build-essential debhelper dpkg-dev pkg-config gettext \
+            build-essential debhelper dpkg-dev fakeroot pkg-config gettext \
             libgraphicsmagick++1-dev libboost-all-dev libthrift-dev \
             vdr vdr-dev python3
           test "$(dpkg-query -W -f='${Version}' vdr-dev)" = "$EXPECTED_VDR"
