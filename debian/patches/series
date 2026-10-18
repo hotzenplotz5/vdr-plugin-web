@@ -1,0 +1,6 @@
+# Main contains the HbbTV implementation already. Do NOT apply the historical
+# 0001-0004 VDR-Suite HbbTV patches a second time to the Git checkout.
+# packaging/seahawk/prepare-source.sh separately reconstructs the old pinned
+# Seahawk upstream tarball and explicitly appends those four patches there.
+enable_fastscale.patch
+fix_thrift-services_ftbs.patch

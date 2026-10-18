@@ -1,0 +1,14 @@
+This repository's current main branch already includes VDR-Suite HbbTV code.
+For direct Git-tree Debian binary builds only the two Seahawk compatibility
+patches listed in debian/patches/series are applied. Historical HbbTV patches
+0001-0004 MUST NOT be applied again to this Git snapshot.
+
+The independent packaging/seahawk/prepare-source.sh reproducibly constructs
+an old, checksum-pinned Seahawk upstream source and appends all four HbbTV
+patches to that original source. Those patches remain in the tree exclusively
+for that historical, isolated quilt-source regeneration path.
+
+The source format is 3.0 (quilt). Publishing a Git snapshot and ensuring the
+correct orig.tar provenance/version requires a separate source-package gate;
+a successful binary build alone is NOT approval to publish a Launchpad Recipe
+from main. Never auto-upload or modify a running VDR installation.

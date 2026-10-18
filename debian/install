@@ -1,0 +1,4 @@
+config/sockets.ini etc/vdr/
+tools/apply_cefbrowser_zdf_controls_fix.py usr/share/vdr-plugin-web/vdr-suite-tools/
+tools/detect_cefbrowser_static_root.py usr/share/vdr-plugin-web/vdr-suite-tools/
+tools/install_cefbrowser_zdf_controls_fix.sh usr/share/vdr-plugin-web/vdr-suite-tools/
