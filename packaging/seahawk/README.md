@@ -1,27 +1,31 @@
-# Seahawk vdr-plugin-web — experimental VDR-Suite quilt package
+# Seahawk vdr-plugin-web — dual packaging modes (experimental)
 
-Uses the **unchanged**, checksum-pinned Seahawk upstream tarball and existing
-Debian metadata as the canonical packaging base, including original changelog,
-copyright, debhelper VDR plugin support and enabled fastscale patch.
+The VDR-Suite HbbTV implementation is **already included in the current Git
+`main` tree**. There are two intentionally different source modes:
 
-The four real quilt patches under `debian/patches/` reproduce the
-24-file difference between Zabrimus master
-`34ded5090fbad021338c491355566dbdb4d98f9d` and
-hotzenplotz5 main `35f50dd8a3a611d56039d190c093a489e4a0193e`.
+1. **Direct Git checkout** (future Daily branch source): `debian/patches/series`
+   applies only Seahawk's `enable_fastscale.patch` and
+   `fix_thrift-services_ftbs.patch`. The historical HbbTV patches **must
+   not** be applied again, because all HbbTV files are present already.
+2. **Pinned Seahawk source reconstruction**: `prepare-source.sh` downloads
+   the **unchanged**, SHA-256-pinned historical Seahawk upstream and Debian
+   tarballs, then applies the four HbbTV patches
+   `debian/patches/0001`–`0004` to that original source only. It also adds
+   `${vdr:Depends}` and opt-in CEF helper tools. This historical workflow
+   is independently tested, but is **not** the source model of the new Daily
+   Git-tree build.
 
-To assemble an **unsigned** Noble Debian source package as an ordinary user:
+Standalone reconstruction as an ordinary user:
 
 ```sh
-bash packaging/seahawk/prepare-source.sh ./quilt-output-noble
+bash packaging/seahawk/prepare-source.sh ./quilt-output-noble noble
+bash packaging/seahawk/prepare-source.sh ./quilt-output-resolute resolute
 ```
 
-Downloads are verified against the maintainer-provided .dsc SHA256.
-The original `debian/patches/enable_fastscale.patch` is retained.
-The prepared package adds `${vdr:Depends}` for runtime ABI checking,
-ships CEF ZDF helper scripts (opt-in only), and verifies `dpkg-source -b/-x`.
-This source builder does NOT install `.deb`, start VDR, upload to PPA or
-modify administrator-owned browser content.
-
-`cefbrowser` and `remotetranscode` are separate HbbTV runtime requirements.
-Binary compilation, clean-install/upgrade and actual HbbTV hardware acceptance
-remain required; do not install on the productive yaVDR.
+The generated source is unsigned, is not uploaded, and does not touch the
+productive yaVDR. `cefbrowser` and `remotetranscode` are separate HbbTV
+runtime requirements. The direct Git-tree binary build and a Launchpad source
+recipe have different gates: before turning on `Built daily`, confirm the
+`3.0 (quilt)` upstream tarball provenance, monotonic package versions for
+Noble/Resolute, ABI dependencies and end-to-end installation from the actual
+published PPA. A green build from a pinned source alone is insufficient.
