@@ -99,7 +99,7 @@ jobs:
             tar --exclude="./.git" -C "$repo" -cf - . | tar -C "$src" -xf -
             tar -C "$stage" --exclude="vdr-plugin-web-$upstream/debian" \
               -czf "$stage/vdr-plugin-web_${upstream}.orig.tar.gz" "vdr-plugin-web-$upstream"
-            dpkg-source -b "$src"
+            (cd "$stage" && dpkg-source -b "$(basename "$src")")
             dsc="$(find "$stage" -maxdepth 1 -name "vdr-plugin-web_*.dsc" -print -quit)"
             test -n "$dsc"
             dpkg-source -x "$dsc" "$stage/verified"
