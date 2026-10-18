@@ -1,0 +1,71 @@
+name: Retire merged HbbTV fix branch (one time)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/retire-merged-hbbtv-branch-20261018.yml
+
+permissions:
+  contents: write
+
+jobs:
+  retire:
+    if: github.repository == 'hotzenplotz5/vdr-plugin-web'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Remove only the unchanged merged PR 1 branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test "${GITHUB_REPOSITORY}" = hotzenplotz5/vdr-plugin-web
+          test "${GITHUB_REF}" = refs/heads/main
+          repo="${GITHUB_REPOSITORY}"
+          target='fix/zdf-hbbtv-controls-input-static'
+          expected='5749c10b91d867de18ee75050ebd301485f87b12'
+          open_prs="$(gh api "repos/$repo/pulls?state=open&per_page=100")"
+          head="$(gh api "repos/$repo/git/ref/heads/$target" --jq '.object.sha' 2>/dev/null || true)"
+          if test -z "$head"; then
+            echo "BRANCH_ALREADY_ABSENT=$target"
+          else
+            test "$head" = "$expected" || {
+              echo "BRANCH_RETAINED_SHA_MOVED=$target head=$head"; exit 0;
+            }
+            pr="$(gh api "repos/$repo/pulls/1")"
+            test "$(jq -r '.head.ref' <<<"$pr")" = "$target"
+            test "$(jq -r '.head.sha' <<<"$pr")" = "$expected"
+            test "$(jq -r '.state' <<<"$pr")" = closed
+            test -n "$(jq -r '.merged_at // empty' <<<"$pr")"
+            if jq -e --arg target "$target" 'any(.[]; .head.ref == $target or .base.ref == $target)' <<<"$open_prs" >/dev/null; then
+              echo "BRANCH_RETAINED_DEPENDENT_PR=$target"; exit 0
+            fi
+            if git grep -q -F "$target" -- . ':!.github/workflows/retire-merged-hbbtv-branch-20261018.yml'; then
+              echo "BRANCH_RETAINED_TRACKED_REFERENCE=$target"; exit 0
+            fi
+            if gh api "repos/$repo/branches/$target" --jq '.protected' | grep -Fxq true; then
+              echo "BRANCH_RETAINED_PROTECTED=$target"; exit 0
+            fi
+            test "$(gh api "repos/$repo/git/ref/heads/$target" --jq '.object.sha')" = "$expected"
+            gh api -X DELETE "repos/$repo/git/refs/heads/$target"
+            echo "BRANCH_DELETED=$target PR=1"
+          fi
+          # Also delete this short-lived housekeeping branch only after merge.
+          own='ops/close-merged-hbbtv-branch-20261018'
+          own_head="$(gh api "repos/$repo/git/ref/heads/$own" --jq '.object.sha' 2>/dev/null || true)"
+          if test -n "$own_head"; then
+            merged="$(gh api "repos/$repo/pulls?state=closed&per_page=30" |
+              jq -r --arg own "$own" '[.[] | select(.head.ref == $own and .merged_at != null)] | .[0].head.sha // empty')"
+            if test "$own_head" = "$merged" &&
+               ! jq -e --arg own "$own" 'any(.[]; .head.ref == $own or .base.ref == $own)' <<<"$open_prs" >/dev/null; then
+              gh api -X DELETE "repos/$repo/git/refs/heads/$own"
+              echo "BRANCH_DELETED=$own PR=merged-housekeeping"
+            else
+              echo "BRANCH_RETAINED_SELF=$own"
+            fi
+          fi
