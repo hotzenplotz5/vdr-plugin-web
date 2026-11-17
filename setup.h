@@ -5,6 +5,7 @@
 #pragma once
 
 #include <vdr/menuitems.h>
+#include "hbbtvhint.h"
 
 struct cWebSetup {
     int resolution = 0;    // 0 browser default, 1..4 = 1280..3840
@@ -24,7 +25,9 @@ void SendRenderParameters();
 
 class cMenuSetupWeb : public cMenuSetupPage {
 private:
+    cHbbtvHintSetup hint;
     cWebSetup web;
+    const char *positions[4];
     const char *resolutions[5];
     const char *frameRates[5];
 
