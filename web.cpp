@@ -33,6 +33,7 @@
 #include "debuglog.h"
 #include "streamevent.h"
 #include "setup.h"
+#include "hbbtvhint.h"
 
 #define TSDIR  "%s/web/%s/%4d-%02d-%02d.%02d.%02d.%d-%d.rec"
 
@@ -880,8 +881,8 @@ void cPluginWeb::Housekeeping() {
 }
 
 void cPluginWeb::MainThreadHook() {
-    // Perform actions in the context of the main program thread.
-    // WARNING: Use with great care - see PLUGINS.html!
+    // HbbTV hint OSD creation/destruction belongs to VDR's main thread.
+    cHbbtvHint::Process();
 }
 
 cString cPluginWeb::Active() {
@@ -896,6 +897,8 @@ time_t cPluginWeb::WakeupTime() {
 
 cOsdObject *cPluginWeb::MainMenuAction() {
     dsyslog("[vdrweb] MainMenuAction: command = %d\n", (int)nextOsdCommand);
+
+    cHbbtvHint::Hide();
 
     const VdrSuiteHbbtvUiCommand runtimeCommand =
         takeVdrSuiteHbbtvUiCommand();
@@ -1070,7 +1073,13 @@ cMenuSetupPage *cPluginWeb::SetupMenu() {
 }
 
 bool cPluginWeb::SetupParse(const char *Name, const char *Value) {
-    if (!strcasecmp(Name, "Resolution")) {
+    if (!strcasecmp(Name, "HbbtvHint")) {
+        hbbtvHintSetup.enabled = atoi(Value) ? 1 : 0;
+    } else if (!strcasecmp(Name, "HbbtvHintDuration")) {
+        hbbtvHintSetup.duration = constrain(atoi(Value), 1, 60);
+    } else if (!strcasecmp(Name, "HbbtvHintPosition")) {
+        hbbtvHintSetup.position = constrain(atoi(Value), 0, 3);
+    } else if (!strcasecmp(Name, "Resolution")) {
         webSetup.resolution = constrain(atoi(Value), 0, 4);
     } else if (!strcasecmp(Name, "DeviceScale")) {
         webSetup.deviceScale = atoi(Value) ? 1 : 0;

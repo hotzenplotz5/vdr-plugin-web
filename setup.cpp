@@ -34,7 +34,13 @@ void SendRenderParameters() {
 }
 
 cMenuSetupWeb::cMenuSetupWeb() {
+    hint = hbbtvHintSetup;
     web = webSetup;
+
+    positions[0] = tr("bottom right");
+    positions[1] = tr("bottom left");
+    positions[2] = tr("top right");
+    positions[3] = tr("top left");
 
     resolutions[0] = tr("browser default");
     resolutions[1] = "1280x720";
@@ -47,6 +53,16 @@ cMenuSetupWeb::cMenuSetupWeb() {
     frameRates[2] = "30";
     frameRates[3] = "50";
     frameRates[4] = "60";
+
+    Add(new cMenuEditBoolItem(
+        tr("Show HbbTV hint"),
+        &hint.enabled));
+    Add(new cMenuEditIntItem(
+        tr("HbbTV hint duration (s)"),
+        &hint.duration, 1, 60));
+    Add(new cMenuEditStraItem(
+        tr("HbbTV hint position"),
+        &hint.position, 4, positions));
 
     Add(new cMenuEditStraItem(
         tr("Browser resolution"),
@@ -68,8 +84,13 @@ cMenuSetupWeb::cMenuSetupWeb() {
 }
 
 void cMenuSetupWeb::Store() {
+    hbbtvHintSetup = hint;
     webSetup = web;
     useOutputDeviceScale = webSetup.deviceScale != 0;
+
+    SetupStore("HbbtvHint", hbbtvHintSetup.enabled);
+    SetupStore("HbbtvHintDuration", hbbtvHintSetup.duration);
+    SetupStore("HbbtvHintPosition", hbbtvHintSetup.position);
 
     SetupStore("Resolution", webSetup.resolution);
     SetupStore("DeviceScale", webSetup.deviceScale);

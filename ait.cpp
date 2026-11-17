@@ -17,6 +17,7 @@
 #include "jsonescape.h"
 #include "service/vdrsuite_hbbtv_discovery_service.h"
 #include "streamevent.h"
+#include "hbbtvhint.h"
 
 #define PMT_SCAN_IDLE     5 // 60 //300    // seconds
 
@@ -183,6 +184,13 @@ cAIT::cAIT(const u_char *Data, u_short Pid) : SI::AIT(Data, true) {
                 URLExtBuffer);
             json = buffer;
             free((void *) buffer);
+        }
+
+        // A broadcast HbbTV autostart application makes the channel eligible
+        // for the small TV-like availability hint.
+        if ((getApplicationType() & 0x7FFF) == 0x0010 &&
+            aitApp.getControlCode() == acc_Autostart) {
+            cHbbtvHint::AutostartApplicationFound();
         }
 
         VdrSuiteHbbtvDiscoveryStore::Upsert(
