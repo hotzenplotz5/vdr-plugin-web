@@ -14,6 +14,7 @@
 #include "ait.h"
 #include "status.h"
 #include "web.h"
+#include "jsonescape.h"
 #include "service/vdrsuite_hbbtv_discovery_service.h"
 
 #define PMT_SCAN_IDLE     5 // 60 //300    // seconds
@@ -41,7 +42,15 @@ const char *hbbtvJson = R"(
 
 inline const char* toHbbtvJson(const char* channelId, const char* channelName, int applicationId, int controlCode, const char* name, const char* urlBase, const char* urlLoc, const char* urlExt) {
     char *buffer;
-    asprintf(&buffer, hbbtvJson, channelId, channelName, applicationId, controlCode, name, urlBase, urlLoc, urlExt);
+    asprintf(&buffer, hbbtvJson,
+             jsonEscape(channelId).c_str(),
+             jsonEscape(channelName).c_str(),
+             applicationId,
+             controlCode,
+             jsonEscape(name).c_str(),
+             jsonEscape(urlBase).c_str(),
+             jsonEscape(urlLoc).c_str(),
+             jsonEscape(urlExt).c_str());
     return buffer;
 }
 
@@ -141,17 +150,42 @@ cAIT::cAIT(const u_char *Data, u_short Pid) : SI::AIT(Data, true) {
             delete d;
         }
 
+        std::string currentChannelId;
+        std::string json;
+        {
 #if APIVERSNUM >= 20301
-        LOCK_CHANNELS_READ
-        const cChannel* currentChannel = Channels->GetByNumber(cDevice::CurrentChannel());
+            LOCK_CHANNELS_READ
+            const cChannel* currentChannel =
+                Channels->GetByNumber(cDevice::CurrentChannel());
 #else
-        const cChannel* currentChannel = Channels->GetByNumber(cDevice::CurrentChannel());
+            const cChannel* currentChannel =
+                Channels->GetByNumber(cDevice::CurrentChannel());
 #endif
+            if (currentChannel == nullptr)
+                continue;
 
-        const cString currentChannelId = currentChannel->GetChannelID().ToString();
+            const cString channelId =
+                currentChannel->GetChannelID().ToString();
+            if (*channelId == nullptr)
+                continue;
+
+            currentChannelId = *channelId;
+
+            const char* buffer = toHbbtvJson(
+                currentChannelId.c_str(),
+                currentChannel->Name(),
+                aitApp.getApplicationId(),
+                aitApp.getControlCode(),
+                nameBuffer,
+                URLBaseBuffer,
+                URLLocBuffer,
+                URLExtBuffer);
+            json = buffer;
+            free((void *) buffer);
+        }
 
         VdrSuiteHbbtvDiscoveryStore::Upsert(
-            *currentChannelId,
+            currentChannelId.c_str(),
             static_cast<uint32_t>(aitApp.getApplicationId()),
             static_cast<uint8_t>(aitApp.getControlCode()),
             static_cast<uint8_t>(ApplPriority),
@@ -160,20 +194,9 @@ cAIT::cAIT(const u_char *Data, u_short Pid) : SI::AIT(Data, true) {
             URLLocBuffer,
             URLExtBuffer);
 
-        const char* buffer = toHbbtvJson(
-            *currentChannelId,
-            currentChannel->Name(),
-            aitApp.getApplicationId(),
-            aitApp.getControlCode(),
-            nameBuffer,
-            URLBaseBuffer,
-            URLLocBuffer,
-            URLExtBuffer);
-        if (browserClient != nullptr) {
-            browserClient->InsertHbbtv(buffer);
-        }
-
-        free((void *) buffer);
+        // Browser IPC must not hold VDR's channel lock.
+        if (browserClient != nullptr)
+            browserClient->InsertHbbtv(json);
     }
 }
 
