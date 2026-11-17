@@ -310,6 +310,66 @@ bool VdrPluginWebServer::ProcessOsdUpdateQOI(const ProcessOsdUpdateQOIType &inpu
     return true;
 }
 
+bool VdrPluginWebServer::ProcessOsdFrame(
+        const ProcessOsdFrameType &input) {
+    DEBUGLOG("[vdrweb] VdrPluginWebServer::ProcessOsdFrame");
+
+    if (vdrSuiteHbbtvRuntimeService != nullptr &&
+        vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive()) {
+        bool ok = true;
+
+        for (const auto &r : input.rects) {
+            if (input.qoi) {
+                ok &= VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(
+                    r.data,
+                    input.render_width,
+                    input.render_height,
+                    r.x,
+                    r.y);
+            } else {
+                const std::int64_t expected =
+                    static_cast<std::int64_t>(r.width) *
+                    static_cast<std::int64_t>(r.height) * 4;
+                if (r.width <= 0 ||
+                    r.height <= 0 ||
+                    expected != static_cast<std::int64_t>(r.data.size())) {
+                    ok = false;
+                    continue;
+                }
+
+                ok &= VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+                    reinterpret_cast<const std::uint8_t *>(r.data.data()),
+                    input.render_width,
+                    input.render_height,
+                    r.x,
+                    r.y,
+                    r.width,
+                    r.height);
+            }
+        }
+
+        if (!ok)
+            throw createException(400, "ProcessOsdFrame capture failed");
+
+        return true;
+    }
+
+    // Keep the page alive for the entire frame, not only for each region.
+    std::lock_guard<std::recursive_mutex> osdLock(pixmap_mutex);
+
+    WebOSDPage *page = WebOSDPage::Get();
+    if (page == nullptr) {
+        logMissingPage("ProcessOsdFrame");
+        throw createException(400, "webOsdPage is null");
+    }
+    missingPageLogged = false;
+
+    if (!page->drawFrame(input))
+        throw createException(400, "ProcessOsdFrame failed");
+
+    return true;
+}
+
 bool VdrPluginWebServer::ProcessTSPacket(const ProcessTSPacketType &input) {
     // DEBUGLOG("VdrPluginWebServer::ProcessTSPacket");
 
