@@ -108,6 +108,56 @@ static std::string channelComponentsJson(const cChannel* channel) {
     return result;
 }
 
+static std::string programmeJson(const cEvent *event) {
+    if (event == nullptr)
+        return "";
+
+    std::string ratings = "[]";
+    if (event->ParentalRating() > 0) {
+        ratings = *cString::sprintf(
+            "[{\"name\":\"%d\",\"scheme\":\"dvb-si\",\"value\":%d,\"region\":\"de\"}]",
+            event->ParentalRating(),
+            event->ParentalRating() - 3);
+    }
+
+    return *cString::sprintf(
+        "{\"programmeID\":\"%u\",\"name\":\"%s\","
+        "\"description\":\"%s\",\"longDescription\":\"%s\","
+        "\"startTime\":%ld,\"duration\":%d,\"parentalRatings\":%s}",
+        event->EventID(),
+        jsonEscape(event->Title()).c_str(),
+        jsonEscape(event->ShortText()).c_str(),
+        jsonEscape(event->Description()).c_str(),
+        static_cast<long>(event->StartTime()),
+        event->Duration(),
+        ratings.c_str());
+}
+
+static std::string channelProgrammesJson(
+        const cChannel* channel,
+        tEventID *presentId = nullptr) {
+    std::string result = "[";
+
+    LOCK_SCHEDULES_READ
+    const cSchedule *schedule = Schedules->GetSchedule(channel);
+    if (schedule != nullptr) {
+        const cEvent *present = schedule->GetPresentEvent();
+        const cEvent *following = schedule->GetFollowingEvent();
+
+        if (presentId != nullptr)
+            *presentId = present ? present->EventID() : 0;
+
+        const std::string p = programmeJson(present);
+        const std::string f = programmeJson(following);
+        result += p;
+        if (!p.empty() && !f.empty())
+            result += ",";
+        result += f;
+    }
+
+    return result + "]";
+}
+
 inline const char* toChannelJson(const cChannel* channel) {
     // longName, Name => currentChannel
     // nid            => ??? (use 1 as default)
@@ -147,6 +197,8 @@ inline const char* toChannelJson(const cChannel* channel) {
         json = json.substr(0, end) +
                ",\n        \"components\": " +
                channelComponentsJson(channel) +
+               ",\n        \"programmes\": " +
+               channelProgrammesJson(channel) +
                "\n    }\n";
     }
 
@@ -199,6 +251,7 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
             }
 
             sid = channel->Sid();
+            lastPresentEventId = 0;
             const cString id = channel->GetChannelID().ToString();
             if (*id == nullptr) {
                device = nullptr;
@@ -229,6 +282,35 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
                  sid);
       }
    }
+}
+
+void cHbbtvDeviceStatus::CheckProgramme() {
+    if (sid < 0 || browserClient == nullptr)
+        return;
+
+    std::string json;
+    {
+        LOCK_CHANNELS_READ
+        const cChannel *channel =
+            Channels->GetByNumber(cDevice::CurrentChannel());
+        if (channel == nullptr)
+            return;
+
+        tEventID presentId = 0;
+        channelProgrammesJson(channel, &presentId);
+
+        if (presentId == lastPresentEventId)
+            return;
+
+        lastPresentEventId = presentId;
+
+        const char *buffer = toChannelJson(channel);
+        json = buffer;
+        free((void *)buffer);
+    }
+
+    // Browser IPC stays outside the channel/schedule lock.
+    browserClient->InsertChannel(json);
 }
 
 void cHbbtvDeviceStatus::SetVolume(int Volume, bool Absolute) {
