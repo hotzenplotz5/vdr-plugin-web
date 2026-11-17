@@ -601,6 +601,9 @@ void cRegularWorker::Action() {
             }
         }
 
+        if (hbbtvDeviceStatus != nullptr)
+            hbbtvDeviceStatus->CheckProgramme();
+
         // Browser-side transparent video runs independently of the native
         // decoder, so report what VDR is actually displaying.
         if (sendStatus && browserClient != nullptr)
