@@ -77,6 +77,7 @@ struct VdrSuiteHbbtvUiCommand {
     std::string sessionId;
     std::string channelId;
     std::string videoInfo;
+    bool mse = false;
 };
 
 std::mutex vdrSuiteHbbtvUiMutex;
@@ -87,7 +88,8 @@ bool queueVdrSuiteHbbtvUiCommand(
     VdrSuiteHbbtvUiCommandType type,
     const std::string& sessionId,
     const std::string& channelId = {},
-    const std::string& queuedVideoInfo = {})
+    const std::string& queuedVideoInfo = {},
+    bool queuedMse = false)
 {
     {
         std::lock_guard<std::mutex> lock(vdrSuiteHbbtvUiMutex);
@@ -98,6 +100,7 @@ bool queueVdrSuiteHbbtvUiCommand(
         vdrSuiteHbbtvUiCommand.sessionId = sessionId;
         vdrSuiteHbbtvUiCommand.channelId = channelId;
         vdrSuiteHbbtvUiCommand.videoInfo = queuedVideoInfo;
+        vdrSuiteHbbtvUiCommand.mse = queuedMse;
     }
 
     cRemote::CallPlugin("web");
@@ -407,6 +410,9 @@ bool VdrPluginWebServer::ProcessTSPacket(const ProcessTSPacketType &input) {
 bool VdrPluginWebServer::StartVideo(const StartVideoType &input) {
     dsyslog("[vdrweb] StartVideo received");
 
+    // A following ResetVideo with the same format can keep the native player.
+    videoInfo = input.videoInfo;
+
     if (!VdrSuiteHbbtvMediaStore::BeginVideo(input.videoInfo)) {
         dsyslog("[vdrweb] VDR-Suite HbbTV media source unavailable");
     }
@@ -434,6 +440,7 @@ bool VdrPluginWebServer::StartVideo(const StartVideoType &input) {
     page->Display();
 
     videoPlayer = new VideoPlayer();
+    videoPlayer->SetMse(input.mse);
     page->SetPlayer(videoPlayer);
 
     cControl::Launch(page);
@@ -543,7 +550,8 @@ bool VdrPluginWebServer::ResetVideo(const ResetVideoType &input) {
             VdrSuiteHbbtvUiCommandType::ResetPlayer,
             {},
             {},
-            input.videoInfo))
+            input.videoInfo,
+            input.mse))
     {
         dsyslog(
             "[vdrweb] VDR-Suite HbbTV player reset queue busy; "
@@ -924,6 +932,7 @@ cOsdObject *cPluginWeb::MainMenuAction() {
                 page->Display();
 
                 videoPlayer = new VideoPlayer();
+                videoPlayer->SetMse(runtimeCommand.mse);
                 page->SetPlayer(videoPlayer);
                 cControl::Launch(page);
                 cControl::Attach();
@@ -934,6 +943,8 @@ cOsdObject *cPluginWeb::MainMenuAction() {
                     "video format did not change");
                 videoPlayer->ResetVideo();
             }
+
+            videoPlayer->SetMse(runtimeCommand.mse);
 
             VideoPlayer::SetVideoSize(
                 lastVideoX,
