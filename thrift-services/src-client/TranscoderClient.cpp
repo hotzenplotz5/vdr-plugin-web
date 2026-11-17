@@ -4,6 +4,7 @@
 
 #include "debuglog.h"
 #include "TranscoderClient.h"
+#include <thrift/TOutput.h>
 #include "TransportBuffer.h"
 
 using namespace apache::thrift;
@@ -29,7 +30,7 @@ TranscoderClient::TranscoderClient(std::string vdrIp, int vdrPort) {
 
     client = new RemoteTranscoderClient(protocol);
 
-    TOutput::instance().setOutputFunction(transcoderClientOutputFunction);
+    GlobalOutput.setOutputFunction(transcoderClientOutputFunction);
 }
 
 TranscoderClient::~TranscoderClient() {

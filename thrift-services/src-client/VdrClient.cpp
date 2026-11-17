@@ -3,6 +3,7 @@
 
 #include "debuglog.h"
 #include "VdrClient.h"
+#include <thrift/TOutput.h>
 #include "TransportBuffer.h"
 
 using namespace apache::thrift;
@@ -29,7 +30,7 @@ VdrClient::VdrClient(std::string vdrIp, int vdrPort) {
 
     client = new VdrPluginWebClient(protocol);
 
-    TOutput::instance().setOutputFunction(vdrClientOutputFunction);
+    GlobalOutput.setOutputFunction(vdrClientOutputFunction);
 }
 
 VdrClient::~VdrClient() {

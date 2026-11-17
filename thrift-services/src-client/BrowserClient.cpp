@@ -4,6 +4,7 @@
 
 #include "debuglog.h"
 #include "BrowserClient.h"
+#include <thrift/TOutput.h>
 #include "TransportBuffer.h"
 
 using namespace apache::thrift;
@@ -29,7 +30,7 @@ BrowserClient::BrowserClient(std::string vdrIp, int vdrPort) {
 
     client = new CefBrowserClient(protocol);
 
-    TOutput::instance().setOutputFunction(browserClientOutputFunction);
+    GlobalOutput.setOutputFunction(browserClientOutputFunction);
 }
 
 BrowserClient::~BrowserClient() {
