@@ -104,6 +104,9 @@ public:
     bool VideoFullscreen() override;
     bool ResetVideo(const ResetVideoType& input) override;
     bool SelectAudioTrack(const SelectAudioTrackType& input) override;
+    bool SelectSubtitleTrack(const SelectSubtitleTrackType& input) override;
+    bool EndOfStream() override;
+    bool StreamEventFilter(const StreamEventFilterType& input) override;
     bool IsWebActive() override;
 };
 
