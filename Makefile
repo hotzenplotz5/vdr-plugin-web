@@ -101,7 +101,7 @@ DEFINES += -DPLUGIN_NAME_I18N='"$(PLUGIN)"' $(CONFIG)
 
 ### The object files (add further files here):
 
-OBJS = $(PLUGIN).o webosdpage.o qoi_impl.o service/vdrsuite_hbbtv_presentation_service.o service/vdrsuite_hbbtv_media_service.o status.o ait.o videocontrol.o backtrace.o \
+OBJS = $(PLUGIN).o webosdpage.o qoi_impl.o service/vdrsuite_hbbtv_presentation_service.o service/vdrsuite_hbbtv_media_service.o status.o ait.o videocontrol.o backtrace.o streamevent.o \
 	   thrift-services/src-gen/CommonService.o thrift-services/src-gen/common_types.o \
 	   thrift-services/src-gen/VdrPluginWeb.o thrift-services/src-gen/pluginweb_types.o \
 	   thrift-services/src-gen/CefBrowser.o thrift-services/src-gen/cefbrowser_types.o \
