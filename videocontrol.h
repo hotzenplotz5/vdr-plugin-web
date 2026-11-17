@@ -26,6 +26,7 @@ protected:
 
 private:
     static void calcVideoPosition(int x, int y, int w, int h, int *newx, int *newy, int *newwidth, int *newheight);
+    bool PlayData(uint8_t *data, int len);
 
 private:
     bool pause;
