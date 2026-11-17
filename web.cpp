@@ -496,12 +496,9 @@ bool VdrPluginWebServer::SelectAudioTrack(const SelectAudioTrackType &input) {
     dsyslog("[vdrweb] SelectAudioTrack received");
 
     std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
-    if (videoPlayer != nullptr) {
-        auto track = input.audioTrack;
-        videoPlayer->SelectAudioTrack(track);
-    }
 
-    return true;
+    // Also valid for live TV: track selection belongs to the primary device.
+    return VideoPlayer::SelectTrack(false, atoi(input.audioTrack.c_str()));
 }
 
 bool VdrPluginWebServer::IsWebActive() {
