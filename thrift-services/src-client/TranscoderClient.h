@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <mutex>
+#include <vector>
 
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
@@ -59,6 +60,19 @@ public:
     bool AudioInfo(std::string& result, const std::string& streamId);
 
     bool GetVideo(std::string& result, const VideoType& input);
+
+    bool MseStart(std::string& result,
+                  const std::string& responseIp,
+                  const std::string& responsePort,
+                  const std::string& vdrIp,
+                  const std::string& vdrPort,
+                  const std::string& postfix,
+                  const std::string& duration,
+                  const std::vector<std::string>& tracks);
+    bool MseAppend(const std::string& streamId, int track,
+                   const std::string& data);
+    bool MseReset(const std::string& streamId);
+    bool MseEndOfStream(const std::string& streamId);
 
 private:
     bool connect();
