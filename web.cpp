@@ -790,6 +790,8 @@ cOsdObject *cPluginWeb::MainMenuAction() {
                     "[vdrweb] Main-thread player rebuild because "
                     "video format changed");
 
+                // Player ownership changes stay on VDR's main thread.
+                cControl::Shutdown();
                 releasePlayer();
 
                 WebOSDPage* page =
