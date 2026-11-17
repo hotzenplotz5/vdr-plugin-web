@@ -30,11 +30,11 @@ public:
                          const std::vector<OsdRectType>& rects);
     bool ProcessTSPacket(std::string& packets);
 
-    bool StartVideo(std::string& videoInfo);
+    bool StartVideo(std::string& videoInfo, bool mse = false);
     bool StopVideo();
     bool Pause();
     bool Resume();
-    bool ResetVideo(std::string& videoInfo);
+    bool ResetVideo(std::string& videoInfo, bool mse = false);
     bool Seeked();
 
     bool VideoSize(int x, int y, int w, int h);
