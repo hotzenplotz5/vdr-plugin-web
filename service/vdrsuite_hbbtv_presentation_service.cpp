@@ -373,9 +373,10 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
     if (presentation.frameRevision == 0)
         presentation.frameRevision = 1;
     presentation.observedAt = unixSeconds();
-    presentation.encodedRevision = 0;
-    presentation.encodedQoi.clear();
 
+    // Keep an already encoded snapshot stable while SuiteBridge is reading
+    // its chunks. A newer BGRA revision may arrive concurrently; the next
+    // META request will encode that newer revision.
     dsyslog(
         "[vdrweb] HbbTV presentation patch: session=%s revision=%llu render=%ux%u patch=%dx%d visibleAlpha=%zu",
         presentation.sessionId.c_str(),
@@ -438,31 +439,31 @@ bool VdrSuiteHbbtvPresentationStore::Read(
         return true;
     }
 
-    if (!ensureEncodedSnapshot(presentation))
-    {
-        message.result =
-            VDRWEB_HBBTV_PRESENTATION_RESULT_FRAME_TOO_LARGE;
-        return true;
-    }
-
-    message.frameRevision = presentation.frameRevision;
-    message.visibility =
-        presentation.visibleAlphaPixels == 0U
-            ? VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN
-            : VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE;
-    message.observedAt = presentation.observedAt;
-    message.renderWidth = presentation.renderWidth;
-    message.renderHeight = presentation.renderHeight;
-    message.encodedBytes =
-        static_cast<std::uint32_t>(
-            presentation.encodedQoi.size());
-
     if (request.operation == VDRWEB_HBBTV_PRESENTATION_META)
     {
+        if (!ensureEncodedSnapshot(presentation))
+        {
+            message.result =
+                VDRWEB_HBBTV_PRESENTATION_RESULT_FRAME_TOO_LARGE;
+            return true;
+        }
+
+        message.frameRevision = presentation.encodedRevision;
+        message.visibility =
+            presentation.visibleAlphaPixels == 0U
+                ? VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN
+                : VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE;
+        message.observedAt = presentation.observedAt;
+        message.renderWidth = presentation.renderWidth;
+        message.renderHeight = presentation.renderHeight;
+        message.encodedBytes =
+            static_cast<std::uint32_t>(
+                presentation.encodedQoi.size());
+
         dsyslog(
             "[vdrweb] HbbTV presentation meta: session=%s revision=%llu render=%ux%u encoded=%u visibleAlpha=%zu visibility=%u",
             sessionId.c_str(),
-            static_cast<unsigned long long>(presentation.frameRevision),
+            static_cast<unsigned long long>(presentation.encodedRevision),
             presentation.renderWidth,
             presentation.renderHeight,
             message.encodedBytes,
@@ -473,12 +474,27 @@ bool VdrSuiteHbbtvPresentationStore::Read(
         return true;
     }
 
-    if (request.frameRevision != presentation.frameRevision)
+    // CHUNK reads must continue to serve the snapshot selected by the
+    // preceding META request even if newer BGRA patches have already arrived.
+    if (presentation.encodedQoi.empty() ||
+        request.frameRevision != presentation.encodedRevision)
     {
         message.result =
             VDRWEB_HBBTV_PRESENTATION_RESULT_REVISION_MISMATCH;
         return true;
     }
+
+    message.frameRevision = presentation.encodedRevision;
+    message.visibility =
+        presentation.visibleAlphaPixels == 0U
+            ? VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN
+            : VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE;
+    message.observedAt = presentation.observedAt;
+    message.renderWidth = presentation.renderWidth;
+    message.renderHeight = presentation.renderHeight;
+    message.encodedBytes =
+        static_cast<std::uint32_t>(
+            presentation.encodedQoi.size());
 
     const std::size_t offset = request.offset;
     if (offset >= presentation.encodedQoi.size())
