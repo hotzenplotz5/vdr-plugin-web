@@ -194,8 +194,19 @@ void VdrPluginWebServer::ping() {
 
 bool VdrPluginWebServer::ProcessOsdUpdate(const ProcessOsdUpdateType &input) {
     DEBUGLOG("[vdrweb] VdrPluginWebServer::ProcessOsdUpdate");
+    dsyslog(
+        "[vdrweb] HbbTV thrift ProcessOsdUpdate: render=%dx%d patch=%d,%d %dx%d",
+        input.disp_width,
+        input.disp_height,
+        input.x,
+        input.y,
+        input.width,
+        input.height);
 
     WebOSDPage* page = WebOSDPage::Get();
+    dsyslog(
+        "[vdrweb] HbbTV thrift ProcessOsdUpdate: page=%p",
+        static_cast<void *>(page));
     if (page == nullptr) {
         // illegal request -> abort
         esyslog("[vdrweb] ProcessOsdUpdate: osd update request while webOsdPage is null.");
@@ -211,8 +222,18 @@ bool VdrPluginWebServer::ProcessOsdUpdate(const ProcessOsdUpdateType &input) {
 
 bool VdrPluginWebServer::ProcessOsdUpdateQOI(const ProcessOsdUpdateQOIType &input) {
     DEBUGLOG("[vdrweb] VdrPluginWebServer::ProcessOsdUpdateQOI");
+    dsyslog(
+        "[vdrweb] HbbTV thrift ProcessOsdUpdateQOI: render=%dx%d pos=%d,%d qoiBytes=%zu",
+        input.render_width,
+        input.render_height,
+        input.x,
+        input.y,
+        input.image_data.size());
 
     WebOSDPage* page = WebOSDPage::Get();
+    dsyslog(
+        "[vdrweb] HbbTV thrift ProcessOsdUpdateQOI: page=%p",
+        static_cast<void *>(page));
     if (page == nullptr) {
         // illegal request -> abort
         esyslog("[vdrweb] ProcessOsdUpdate: osd update request while webOsdPage is null.");
