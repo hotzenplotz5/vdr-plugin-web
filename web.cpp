@@ -247,6 +247,60 @@ bool VdrPluginWebServer::ProcessOsdUpdateQOI(const ProcessOsdUpdateQOIType &inpu
     return true;
 }
 
+bool VdrPluginWebServer::ProcessOsdFrame(const ProcessOsdFrameType &input) {
+    dsyslog(
+        "[vdrweb] HbbTV thrift ProcessOsdFrame: render=%dx%d qoi=%d rects=%zu",
+        input.render_width,
+        input.render_height,
+        input.qoi ? 1 : 0,
+        input.rects.size());
+
+    WebOSDPage* page = WebOSDPage::Get();
+    if (page == nullptr) {
+        esyslog("[vdrweb] ProcessOsdFrame: osd update request while webOsdPage is null.");
+        throw createException(400, "webOsdPage is null");
+    }
+
+    for (const auto& rect : input.rects) {
+        bool ok = false;
+
+        if (input.qoi) {
+            ok = page->drawImageQOI(
+                rect.data,
+                input.render_width,
+                input.render_height,
+                rect.x,
+                rect.y);
+        } else {
+            if (rect.width <= 0 || rect.height <= 0) {
+                throw createException(400, "ProcessOsdFrame invalid rectangle");
+            }
+
+            const std::size_t expectedBytes =
+                static_cast<std::size_t>(rect.width) *
+                static_cast<std::size_t>(rect.height) * 4U;
+            if (rect.data.size() != expectedBytes) {
+                throw createException(400, "ProcessOsdFrame invalid BGRA payload");
+            }
+
+            ok = page->drawImage(
+                reinterpret_cast<std::uint8_t *>(
+                    const_cast<char *>(rect.data.data())),
+                input.render_width,
+                input.render_height,
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height);
+        }
+
+        if (!ok)
+            throw createException(400, "ProcessOsdFrame failed");
+    }
+
+    return true;
+}
+
 bool VdrPluginWebServer::ProcessTSPacket(const ProcessTSPacketType &input) {
     // DEBUGLOG("VdrPluginWebServer::ProcessTSPacket");
 
@@ -437,6 +491,25 @@ bool VdrPluginWebServer::SelectAudioTrack(const SelectAudioTrackType &input) {
 bool VdrPluginWebServer::IsWebActive() {
     return (WebOSDPage::Get() != nullptr) || (videoPlayer != nullptr);
 }
+
+bool VdrPluginWebServer::SelectSubtitleTrack(const SelectSubtitleTrackType &input) {
+    dsyslog("[vdrweb] SelectSubtitleTrack unsupported: %s", input.subtitleTrack.c_str());
+    return false;
+}
+
+bool VdrPluginWebServer::EndOfStream() {
+    dsyslog("[vdrweb] EndOfStream unsupported");
+    return false;
+}
+
+bool VdrPluginWebServer::StreamEventFilter(const StreamEventFilterType &input) {
+    dsyslog(
+        "[vdrweb] StreamEventFilter unsupported: componentTag=%d enable=%d",
+        input.componentTag,
+        input.enable ? 1 : 0);
+    return false;
+}
+
 
 VdrPluginWebIf *VdrPluginWebCloneFactory::getHandler(const TConnectionInfo &connInfo) {
     std::shared_ptr<TSocket> sock = std::dynamic_pointer_cast<TSocket>(connInfo.transport);
