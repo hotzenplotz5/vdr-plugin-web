@@ -373,6 +373,16 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
     presentation.observedAt = unixSeconds();
     presentation.encodedRevision = 0;
     presentation.encodedQoi.clear();
+
+    dsyslog(
+        "[vdrweb] HbbTV presentation patch: session=%s revision=%llu render=%ux%u patch=%dx%d visibleAlpha=%zu",
+        presentation.sessionId.c_str(),
+        static_cast<unsigned long long>(presentation.frameRevision),
+        presentation.renderWidth,
+        presentation.renderHeight,
+        width,
+        height,
+        presentation.visibleAlphaPixels);
     return true;
 }
 
@@ -399,12 +409,17 @@ bool VdrSuiteHbbtvPresentationStore::Read(
     std::lock_guard<std::mutex> lock(presentationMutex);
     if (presentation.sessionId.empty())
     {
+        dsyslog("[vdrweb] HbbTV presentation read: NO_SESSION request=%s", sessionId.c_str());
         message.result =
             VDRWEB_HBBTV_PRESENTATION_RESULT_NO_SESSION;
         return true;
     }
     if (presentation.sessionId != sessionId)
     {
+        dsyslog(
+            "[vdrweb] HbbTV presentation read: SESSION_MISMATCH request=%s active=%s",
+            sessionId.c_str(),
+            presentation.sessionId.c_str());
         message.result =
             VDRWEB_HBBTV_PRESENTATION_RESULT_SESSION_MISMATCH;
         return true;
@@ -412,6 +427,10 @@ bool VdrSuiteHbbtvPresentationStore::Read(
     if (presentation.frameRevision == 0 ||
         presentation.bgra.empty())
     {
+        dsyslog(
+            "[vdrweb] HbbTV presentation read: NO_FRAME session=%s revision=%llu",
+            sessionId.c_str(),
+            static_cast<unsigned long long>(presentation.frameRevision));
         message.result =
             VDRWEB_HBBTV_PRESENTATION_RESULT_NO_FRAME;
         return true;
@@ -438,6 +457,15 @@ bool VdrSuiteHbbtvPresentationStore::Read(
 
     if (request.operation == VDRWEB_HBBTV_PRESENTATION_META)
     {
+        dsyslog(
+            "[vdrweb] HbbTV presentation meta: session=%s revision=%llu render=%ux%u encoded=%u visibleAlpha=%zu visibility=%u",
+            sessionId.c_str(),
+            static_cast<unsigned long long>(presentation.frameRevision),
+            presentation.renderWidth,
+            presentation.renderHeight,
+            message.encodedBytes,
+            presentation.visibleAlphaPixels,
+            static_cast<unsigned int>(message.visibility));
         message.result =
             VDRWEB_HBBTV_PRESENTATION_RESULT_OK;
         return true;
