@@ -17,6 +17,7 @@
 #include "webosdpage.h"
 #include "jsonescape.h"
 #include "service/vdrsuite_hbbtv_discovery_service.h"
+#include "streamevent.h"
 
 const char *channelJson = R"(
     {
@@ -220,6 +221,9 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
    // otherwise ChannelNumber is the number of the channel that has been switched to.
    // LiveView tells whether this channel switch is for live viewing.
    if (LiveView) {
+      // Stream-event filters are scoped to the live channel.
+      StreamEventsChannelSwitch(nullptr);
+
       if (device) {
          isyslog("[vdrweb] Detaching HbbTV ait filter from device %d",
                  device->CardIndex() + 1);
@@ -275,6 +279,7 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
             return;
 
          device->AttachFilter(aitFilter = new cAitFilter(sid));
+         StreamEventsChannelSwitch(device);
          isyslog("[vdrweb] Attached HbbTV ait filter to device %d, vdrDev=%d actDev=%d, Sid=0x%04x",
                  device->CardIndex()+1,
                  vdrDevice ? vdrDevice->CardIndex()+1 : -1,

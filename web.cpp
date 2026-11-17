@@ -31,6 +31,7 @@
 #include "service/vdrsuite_hbbtv_media_service.h"
 #include "dummyosd.h"
 #include "debuglog.h"
+#include "streamevent.h"
 
 #define TSDIR  "%s/web/%s/%4d-%02d-%02d.%02d.%02d.%d-%d.rec"
 
@@ -521,9 +522,10 @@ bool VdrPluginWebServer::EndOfStream() {
 
 bool VdrPluginWebServer::StreamEventFilter(
         const StreamEventFilterType &input) {
-    (void)input;
-    // DSM-CC stream events are implemented in a later, separate slice.
-    return false;
+    dsyslog("[vdrweb] StreamEventFilter: component tag %d, %s",
+            input.componentTag,
+            input.enable ? "on" : "off");
+    return StreamEventsRequest(input.componentTag, input.enable);
 }
 
 bool VdrPluginWebServer::IsWebActive() {
@@ -778,6 +780,9 @@ void cPluginWeb::Stop() {
     VdrSuiteHbbtvMediaStore::EndSession();
     vdrSuiteHbbtvRuntimeService.reset();
     clearVdrSuiteHbbtvUiCommand();
+
+    // Stop the sender before destroying the BrowserClient it uses.
+    StreamEventsShutdown();
 
     delete browserClient;
     browserClient = nullptr;

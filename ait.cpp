@@ -16,6 +16,7 @@
 #include "web.h"
 #include "jsonescape.h"
 #include "service/vdrsuite_hbbtv_discovery_service.h"
+#include "streamevent.h"
 
 #define PMT_SCAN_IDLE     5 // 60 //300    // seconds
 
@@ -279,6 +280,19 @@ void cAitFilter::Process(u_short Pid, u_char Tid, const u_char *Data, int Length
             // Scan the stream-specific loop:
             SI::PMT::Stream stream;
             for (SI::Loop::Iterator it; pmt.streamLoop.getNext(stream, it);) {
+                // Remember component tag -> PID mappings used by DSM-CC stream events.
+                SI::Descriptor *streamIdDescriptor;
+                for (SI::Loop::Iterator streamIt;
+                     (streamIdDescriptor =
+                          stream.streamDescriptors.getNext(
+                              streamIt,
+                              SI::StreamIdentifierDescriptorTag));) {
+                    StreamEventsComponent(
+                        ((SI::StreamIdentifierDescriptor *)streamIdDescriptor)
+                            ->getComponentTag(),
+                        stream.getPid());
+                    delete streamIdDescriptor;
+                }
                 if (stream.getStreamType() == 0x05) {
                     SI::Descriptor *d;
                     for (SI::Loop::Iterator it2; (d = stream.streamDescriptors.getNext(it2,
