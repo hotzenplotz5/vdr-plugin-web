@@ -4,6 +4,7 @@
 
 #include "debuglog.h"
 #include "BrowserClient.h"
+#include "TransportBuffer.h"
 
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
@@ -19,7 +20,11 @@ BrowserClient::BrowserClient(std::string vdrIp, int vdrPort) {
     DEBUGLOG("Construct BrowserClient");
 
     socket = std::make_shared<TSocket>(vdrIp, vdrPort);
-    transport = static_cast<const std::shared_ptr<TTransport>>(new TBufferedTransport(socket));
+    socket->setConnTimeout(3000);
+    socket->setSendTimeout(10000);
+    socket->setRecvTimeout(10000);
+    transport = std::make_shared<TBufferedTransport>(
+        socket, THRIFT_TRANSPORT_BUFFER_SIZE, THRIFT_TRANSPORT_BUFFER_SIZE);
     std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
 
     client = new CefBrowserClient(protocol);
@@ -33,60 +38,55 @@ BrowserClient::~BrowserClient() {
     CefBrowserClient *clientOld = client;
     client = nullptr;
 
-    if (transport && transport->isOpen()) {
-        transport->close();
-        transport = nullptr;
-    }
+    // Do not flush a potentially broken buffered transport here.
+    socket->close();
+    transport = nullptr;
 
     delete clientOld;
 }
 
 bool BrowserClient::connect() {
-    // DEBUGLOG("BrowserClient::connect");
-
-    if (transport == nullptr) {
+    if (transport == nullptr)
         return false;
-    }
 
-    if (transport && !transport->isOpen()) {
-        // connection closed. Try to connect
+    if (!transport->isOpen()) {
         try {
             transport->open();
-        } catch (TTransportException& err) {
-            // connection not possible
+        } catch (TTransportException&) {
             return false;
         }
     }
 
-    if (socket && !socket->isOpen()) {
+    if (!socket || !socket->isOpen())
         return false;
-    }
 
-    int error_code;
-    socklen_t error_code_size = sizeof(error_code);
-    getsockopt(socket->getSocketFD(), SOL_SOCKET, SO_ERROR, &error_code, &error_code_size);
+    int errorCode = 0;
+    socklen_t errorCodeSize = sizeof(errorCode);
+    getsockopt(socket->getSocketFD(), SOL_SOCKET, SO_ERROR, &errorCode, &errorCodeSize);
+    return errorCode == 0;
+}
 
-    if (error_code < 0) {
-        return false;
-    }
-
-    return true;
+void BrowserClient::reset() {
+    socket->close();
+    transport = std::make_shared<TBufferedTransport>(
+        socket, THRIFT_TRANSPORT_BUFFER_SIZE, THRIFT_TRANSPORT_BUFFER_SIZE);
+    delete client;
+    client = new CefBrowserClient(std::make_shared<TBinaryProtocol>(transport));
 }
 
 bool BrowserClient::ping() {
-    // DEBUGLOG("BrowserClient::ping");
+    std::lock_guard<std::recursive_mutex> lock(browser_send_mutex);
 
-    if (!connect()) {
+    if (!connect())
         return false;
-    }
 
     try {
         client->ping();
         return true;
-    } catch (OperationFailed &err) {
+    } catch (OperationFailed&) {
         return false;
-    } catch (TException &err) {
-        transport->close();
+    } catch (TException&) {
+        reset();
         return false;
     }
 }
@@ -94,20 +94,26 @@ bool BrowserClient::ping() {
 template <typename F> bool BrowserClient::processInternal(F&& request) {
     std::lock_guard<std::recursive_mutex> lock(browser_send_mutex);
 
-    if (!ping()) {
-        return false;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (!connect())
+            return false;
+
+        try {
+            return request();
+        } catch (OperationFailed&) {
+            return false;
+        } catch (TTransportException &err) {
+            reset();
+            if (err.getType() == TTransportException::TIMED_OUT)
+                return false;
+        } catch (TException&) {
+            reset();
+            return false;
+        }
     }
 
-    try {
-        return request();
-    } catch (OperationFailed &err) {
-        return false;
-    } catch (TException &err) {
-       transport->close();
-       return false;
-    }
+    return false;
 }
-
 bool BrowserClient::LoadUrl(const std::string& url) {
     DEBUGLOG("BrowserClient::LoadUrl: %s", url.c_str());
 
