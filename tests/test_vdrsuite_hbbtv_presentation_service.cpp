@@ -6,6 +6,14 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <cstdarg>
+
+// Standalone service test: vdr/tools.h logging is linked by the real plugin,
+// but the unit-test binary intentionally does not link the VDR runtime.
+int SysLogLevel = 3;
+void syslog_with_tid(int, const char*, ...)
+{
+}
 
 namespace
 {
