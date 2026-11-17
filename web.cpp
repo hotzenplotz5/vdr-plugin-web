@@ -32,6 +32,7 @@
 #include "dummyosd.h"
 #include "debuglog.h"
 #include "streamevent.h"
+#include "setup.h"
 
 #define TSDIR  "%s/web/%s/%4d-%02d-%02d.%02d.%02d.%d-%d.rec"
 
@@ -770,6 +771,10 @@ bool cPluginWeb::Initialize() {
 }
 
 bool cPluginWeb::Start() {
+    if (webSetup.deviceScale < 0)
+        webSetup.deviceScale = useOutputDeviceScale ? 1 : 0;
+    useOutputDeviceScale = webSetup.deviceScale != 0;
+
     isyslog("[vdrweb] Start hbbtv url collector");
     hbbtvDeviceStatus = new cHbbtvDeviceStatus();
 
@@ -982,6 +987,7 @@ cOsdObject *cPluginWeb::MainMenuAction() {
         if (!runtimeCommand.channelId.empty() &&
             currentChannelId == runtimeCommand.channelId &&
             browserClient != nullptr) {
+            SendRenderParameters();
             VdrSuiteHbbtvPresentationStore::BeginSession(
                 runtimeCommand.sessionId);
             VdrSuiteHbbtvMediaStore::BeginSession(
@@ -1037,6 +1043,9 @@ cOsdObject *cPluginWeb::MainMenuAction() {
 
     WebOSDPage* page = WebOSDPage::Create(useOutputDeviceScale, OSD);
 
+    if (nextOsdCommand != REOPEN)
+        SendRenderParameters();
+
     if (nextOsdCommand == OPEN) {
         if (!browserClient->RedButton(*currentChannel->GetChannelID().ToString())) {
             Skins.QueueMessage(mtInfo, tr("Browser not available"));
@@ -1057,13 +1066,26 @@ cOsdObject *cPluginWeb::MainMenuAction() {
 }
 
 cMenuSetupPage *cPluginWeb::SetupMenu() {
-    // Return a setup menu in case the plugin supports one.
-    return nullptr;
+    return new cMenuSetupWeb();
 }
 
 bool cPluginWeb::SetupParse(const char *Name, const char *Value) {
-    // Parse your own setup parameters and store their values.
-    return false;
+    if (!strcasecmp(Name, "Resolution")) {
+        webSetup.resolution = constrain(atoi(Value), 0, 4);
+    } else if (!strcasecmp(Name, "DeviceScale")) {
+        webSetup.deviceScale = atoi(Value) ? 1 : 0;
+        useOutputDeviceScale = webSetup.deviceScale != 0;
+    } else if (!strcasecmp(Name, "FrameRate")) {
+        webSetup.frameRate = constrain(atoi(Value), 0, 4);
+    } else if (!strcasecmp(Name, "Mse")) {
+        webSetup.mse = atoi(Value) ? 1 : 0;
+    } else if (!strcasecmp(Name, "ZdfQuirks")) {
+        webSetup.zdfQuirks = atoi(Value) ? 1 : 0;
+    } else {
+        return false;
+    }
+
+    return true;
 }
 
 bool cPluginWeb::Service(const char *Id, void *Data = nullptr) {

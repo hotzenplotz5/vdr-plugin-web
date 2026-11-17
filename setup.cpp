@@ -1,0 +1,81 @@
+/*
+ * setup.cpp: technical setup of the web plugin
+ */
+
+#include <vdr/i18n.h>
+#include "setup.h"
+#include "web.h"
+
+cWebSetup webSetup;
+
+extern bool useOutputDeviceScale;
+
+int cWebSetup::Width() const {
+    static const int widths[] = { 0, 1280, 1920, 2560, 3840 };
+    return (resolution >= 0 && resolution <= 4) ? widths[resolution] : 0;
+}
+
+int cWebSetup::FrameRate() const {
+    static const int rates[] = { 0, 25, 30, 50, 60 };
+    return (frameRate >= 0 && frameRate <= 4) ? rates[frameRate] : 0;
+}
+
+void SendRenderParameters() {
+    if (browserClient == nullptr)
+        return;
+
+    if (webSetup.Width() > 0 || webSetup.FrameRate() > 0)
+        browserClient->SetRenderParameters(
+            webSetup.Width(), webSetup.FrameRate());
+
+    browserClient->SetBrowserOptions(
+        webSetup.mse != 0,
+        webSetup.zdfQuirks != 0);
+}
+
+cMenuSetupWeb::cMenuSetupWeb() {
+    web = webSetup;
+
+    resolutions[0] = tr("browser default");
+    resolutions[1] = "1280x720";
+    resolutions[2] = "1920x1080";
+    resolutions[3] = "2560x1440";
+    resolutions[4] = "3840x2160";
+
+    frameRates[0] = tr("browser default");
+    frameRates[1] = "25";
+    frameRates[2] = "30";
+    frameRates[3] = "50";
+    frameRates[4] = "60";
+
+    Add(new cMenuEditStraItem(
+        tr("Browser resolution"),
+        &web.resolution, 5, resolutions));
+#ifdef ENABLE_FAST_SCALE
+    Add(new cMenuEditBoolItem(
+        tr("Scale by output device"),
+        &web.deviceScale));
+#endif
+    Add(new cMenuEditStraItem(
+        tr("Browser frame rate"),
+        &web.frameRate, 5, frameRates));
+    Add(new cMenuEditBoolItem(
+        tr("Media Source Extensions"),
+        &web.mse));
+    Add(new cMenuEditBoolItem(
+        tr("ZDF special handling"),
+        &web.zdfQuirks));
+}
+
+void cMenuSetupWeb::Store() {
+    webSetup = web;
+    useOutputDeviceScale = webSetup.deviceScale != 0;
+
+    SetupStore("Resolution", webSetup.resolution);
+    SetupStore("DeviceScale", webSetup.deviceScale);
+    SetupStore("FrameRate", webSetup.frameRate);
+    SetupStore("Mse", webSetup.mse);
+    SetupStore("ZdfQuirks", webSetup.zdfQuirks);
+
+    SendRenderParameters();
+}

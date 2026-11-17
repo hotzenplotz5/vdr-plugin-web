@@ -62,6 +62,7 @@ WebOSDPage *WebOSDPage::Create(bool useOutputDeviceScale, OSD_MODE osdMode) {
             if (webOsdPage == nullptr) {
                 webOsdPage = new WebOSDPage(useOutputDeviceScale, osdMode);
             }
+            webOsdPage->useOutputDeviceScale = useOutputDeviceScale;
             currentOsdMode = OSD;
             return webOsdPage;
 
@@ -69,6 +70,7 @@ WebOSDPage *WebOSDPage::Create(bool useOutputDeviceScale, OSD_MODE osdMode) {
             if (playerWebOsdPage == nullptr) {
                 playerWebOsdPage = new WebOSDPage(useOutputDeviceScale, osdMode);
             }
+            playerWebOsdPage->useOutputDeviceScale = useOutputDeviceScale;
             currentOsdMode = PLAYER;
             return playerWebOsdPage;
 
