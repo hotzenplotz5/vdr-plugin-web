@@ -19,6 +19,7 @@
 #include <utility>
 #include "web.h"
 #include "BrowserClient.h"
+#include "thrift-services/src-client/TransportBuffer.h"
 #include "ini.h"
 #include "webosdpage.h"
 #include "status.h"
@@ -32,7 +33,7 @@
 
 #define TSDIR  "%s/web/%s/%4d-%02d-%02d.%02d.%02d.%d-%d.rec"
 
-TThreadPoolServer *thriftServer;
+TThreadedServer *thriftServer;
 
 bool saveTS;
 char* currentTSFilename;
@@ -170,11 +171,54 @@ void createTSFileName() {
     currentTSFilename = strdup(cString::sprintf("%s/00001.ts", currentTSDir));
 }
 
-void stopVideo() {
+extern WebOSDPage *playerWebOsdPage;
+
+// videoPlayer is accessed by Thrift worker threads, the regular worker and the
+// main-thread command bridge.
+std::recursive_mutex playerMutex;
+
+static bool isCurrentControl(cControl *control) {
+#if VDRVERSNUM >= 20803
+    for (int i = 0; i < 20; ++i) {
+        cMutexLock controlLock;
+        bool lockedOtherwise = false;
+        cControl *current =
+            cControl::Control(controlLock, true, &lockedOtherwise);
+        if (!lockedOtherwise)
+            return current == control;
+    }
+    return false;
+#else
+    cMutexLock controlLock;
+    return cControl::Control(controlLock, true) == control;
+#endif
+}
+
+static void releasePlayer() {
+    std::lock_guard<std::recursive_mutex> lock(playerMutex);
+
+    WebOSDPage *page = playerWebOsdPage;
+    if (page != nullptr) {
+        page->SetPlayer(nullptr);
+
+        if (isCurrentControl(page))
+            cControl::Shutdown();
+        else
+            delete page;
+    }
+
     if (videoPlayer != nullptr) {
         VideoPlayer *copy = videoPlayer;
         videoPlayer = nullptr;
         delete copy;
+    }
+}
+
+void stopVideo() {
+    std::lock_guard<std::recursive_mutex> lock(playerMutex);
+
+    if (videoPlayer != nullptr || playerWebOsdPage != nullptr) {
+        releasePlayer();
 
         nextOsdCommand = REOPEN;
         cRemote::CallPlugin("web");
@@ -264,6 +308,7 @@ bool VdrPluginWebServer::ProcessTSPacket(const ProcessTSPacketType &input) {
         }
     }
 
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
     if (videoPlayer != nullptr) {
         videoPlayer->PlayPacket((uint8_t *) input.ts.c_str(), (int) input.ts.length());
 
@@ -301,6 +346,9 @@ bool VdrPluginWebServer::StartVideo(const StartVideoType &input) {
         return true;
     }
 
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+    releasePlayer();
+
     WebOSDPage* page;
     nextOsdCommand = CLOSE;
     cRemote::CallPlugin("web");
@@ -337,6 +385,7 @@ bool VdrPluginWebServer::PauseVideo() {
     dsyslog("[vdrweb] PauseVideo received");
 
     VdrSuiteHbbtvMediaStore::PauseVideo();
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
     if (videoPlayer != nullptr) {
         videoPlayer->Pause();
     }
@@ -348,6 +397,7 @@ bool VdrPluginWebServer::ResumeVideo() {
     dsyslog("[vdrweb] ResumeVideo received");
 
     VdrSuiteHbbtvMediaStore::ResumeVideo();
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
     if (videoPlayer != nullptr) {
         videoPlayer->Resume();
     }
@@ -358,6 +408,7 @@ bool VdrPluginWebServer::ResumeVideo() {
 bool VdrPluginWebServer::Seeked() {
     dsyslog("[vdrweb] Seeked received");
 
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
     if (videoPlayer != nullptr) {
         videoPlayer->ResetVideo();
     }
@@ -428,6 +479,7 @@ bool VdrPluginWebServer::ResetVideo(const ResetVideoType &input) {
 bool VdrPluginWebServer::SelectAudioTrack(const SelectAudioTrackType &input) {
     dsyslog("[vdrweb] SelectAudioTrack received");
 
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
     if (videoPlayer != nullptr) {
         auto track = input.audioTrack;
         videoPlayer->SelectAudioTrack(track);
@@ -440,6 +492,7 @@ bool VdrPluginWebServer::IsWebActive() {
     if (vdrSuiteHbbtvRuntimeService != nullptr &&
         vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive())
         return true;
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
     return (WebOSDPage::Get() != nullptr) || (videoPlayer != nullptr);
 }
 
@@ -462,19 +515,16 @@ void VdrPluginWebCloneFactory::releaseHandler(CommonServiceIf* handler) {
 }
 
 void startServer() {
-    const int workerCount = 4;
-    std::shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(workerCount);
-    threadManager->threadFactory(std::make_shared<ThreadFactory>());
-    threadManager->start();
-
     std::string listenIp = bindAll ? "0.0.0.0" : vdrIp;
 
-    thriftServer = new TThreadPoolServer(
-            std::make_shared<VdrPluginWebProcessorFactory>(std::make_shared<VdrPluginWebCloneFactory>()),
+    // Clients keep their Thrift connections open. A fixed worker pool can be
+    // exhausted permanently, so use one worker thread per connection.
+    thriftServer = new TThreadedServer(
+            std::make_shared<VdrPluginWebProcessorFactory>(
+                std::make_shared<VdrPluginWebCloneFactory>()),
             std::make_shared<TServerSocket>(listenIp, vdrPort),
-            std::make_shared<TBufferedTransportFactory>(),
-            std::make_shared<TBinaryProtocolFactory>(),
-            threadManager);
+            std::make_shared<TLargeBufferedTransportFactory>(),
+            std::make_shared<TBinaryProtocolFactory>());
 
     thriftServer->serve();
 }
@@ -497,11 +547,9 @@ void cRegularWorker::Action() {
     while (Running()) {
         m_waitCondition.TimedWait(m_mutex, loopSleep);
 
-        if (WebOSDPage::Get() == nullptr && videoPlayer != nullptr) {
-            VideoPlayer *cp = videoPlayer;
-            videoPlayer = nullptr;
-            delete cp;
-        }
+        std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+        if (WebOSDPage::Get() == nullptr && videoPlayer != nullptr)
+            releasePlayer();
     }
 }
 
@@ -730,6 +778,7 @@ cOsdObject *cPluginWeb::MainMenuAction() {
 
     if (runtimeCommand.type ==
         VdrSuiteHbbtvUiCommandType::ResetPlayer) {
+        std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
         if (videoPlayer != nullptr) {
             dsyslog(
                 "[vdrweb] Main-thread video change from %s to %s",
@@ -741,7 +790,7 @@ cOsdObject *cPluginWeb::MainMenuAction() {
                     "[vdrweb] Main-thread player rebuild because "
                     "video format changed");
 
-                cControl::Shutdown();
+                releasePlayer();
 
                 WebOSDPage* page =
                     WebOSDPage::Create(
@@ -750,8 +799,9 @@ cOsdObject *cPluginWeb::MainMenuAction() {
                 page->Display();
 
                 videoPlayer = new VideoPlayer();
-                cControl::Launch(page);
                 page->SetPlayer(videoPlayer);
+                cControl::Launch(page);
+                cControl::Attach();
             }
             else {
                 dsyslog(
