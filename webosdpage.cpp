@@ -258,6 +258,93 @@ bool WebOSDPage::drawImage(uint8_t* image, int render_width, int render_height, 
     return scaleAndPaint(image, render_width, render_height, x, y, width, height);
 }
 
+bool WebOSDPage::drawFrame(
+        const pluginweb::ProcessOsdFrameType &frame) {
+    bool ok = true;
+
+    for (const auto &r : frame.rects) {
+        if (frame.qoi) {
+            if (!VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(
+                    r.data,
+                    frame.render_width,
+                    frame.render_height,
+                    r.x,
+                    r.y)) {
+                esyslog("[vdrweb] failed to capture HbbTV QOI frame region");
+                ok = false;
+                continue;
+            }
+
+            qoi_desc desc;
+            void *image = qoi_decode(
+                r.data.c_str(),
+                static_cast<int>(r.data.size()),
+                &desc,
+                4);
+            if (image == nullptr) {
+                esyslog("[vdrweb] failed to decode qoi OSD frame region");
+                ok = false;
+                continue;
+            }
+
+            ok &= scaleAndPaint(
+                static_cast<uint8_t *>(image),
+                frame.render_width,
+                frame.render_height,
+                r.x,
+                r.y,
+                static_cast<int>(desc.width),
+                static_cast<int>(desc.height),
+                false);
+            free(image);
+        } else {
+            const std::int64_t expected =
+                static_cast<std::int64_t>(r.width) *
+                static_cast<std::int64_t>(r.height) * 4;
+            if (r.width <= 0 ||
+                r.height <= 0 ||
+                expected != static_cast<std::int64_t>(r.data.size())) {
+                esyslog("[vdrweb] invalid raw OSD frame region");
+                ok = false;
+                continue;
+            }
+
+            auto *pixels = reinterpret_cast<uint8_t *>(
+                const_cast<char *>(r.data.data()));
+
+            if (!VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+                    pixels,
+                    frame.render_width,
+                    frame.render_height,
+                    r.x,
+                    r.y,
+                    r.width,
+                    r.height)) {
+                esyslog("[vdrweb] failed to capture HbbTV frame region");
+                ok = false;
+                continue;
+            }
+
+            ok &= scaleAndPaint(
+                pixels,
+                frame.render_width,
+                frame.render_height,
+                r.x,
+                r.y,
+                r.width,
+                r.height,
+                false);
+        }
+    }
+
+    // Compose the complete frame before presenting it.
+    std::lock_guard<std::recursive_mutex> lock(pixmap_mutex);
+    if (osd != nullptr)
+        osd->Flush();
+
+    return ok;
+}
+
 bool WebOSDPage::drawImageQOI(const std::string qoibuffer, const int render_width, const int render_height, const int x, const int y) {
     // decode image data
     qoi_desc desc;
@@ -288,7 +375,9 @@ bool WebOSDPage::drawImageQOI(const std::string qoibuffer, const int render_widt
     return retValue;
 }
 
-bool WebOSDPage::scaleAndPaint(uint8_t* image, int render_width, int render_height, int x, int y, int width, int height) {
+bool WebOSDPage::scaleAndPaint(uint8_t* image, int render_width, int render_height,
+                               int x, int y, int width, int height,
+                               bool flush) {
     // sanity check
     if (width > 3840 || height > 2160 || width <= 0 || height <= 0) {
         return false;
@@ -312,7 +401,7 @@ bool WebOSDPage::scaleAndPaint(uint8_t* image, int render_width, int render_heig
             esyslog("[vdrweb] Pixmap is null. OSD not available");
         }
 
-        if (osd != nullptr) {
+        if (flush && osd != nullptr) {
             osd->Flush();
         }
 
@@ -383,7 +472,7 @@ bool WebOSDPage::scaleAndPaint(uint8_t* image, int render_width, int render_heig
     }
 #endif
 
-    if (osd != nullptr) {
+    if (flush && osd != nullptr) {
         osd->Flush();
     }
 
