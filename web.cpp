@@ -501,6 +501,31 @@ bool VdrPluginWebServer::SelectAudioTrack(const SelectAudioTrackType &input) {
     return VideoPlayer::SelectTrack(false, atoi(input.audioTrack.c_str()));
 }
 
+bool VdrPluginWebServer::SelectSubtitleTrack(
+        const SelectSubtitleTrackType &input) {
+    dsyslog("[vdrweb] SelectSubtitleTrack received");
+
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+    return VideoPlayer::SelectTrack(
+        true, atoi(input.subtitleTrack.c_str()));
+}
+
+bool VdrPluginWebServer::EndOfStream() {
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+
+    if (videoPlayer != nullptr)
+        videoPlayer->SetEndOfStream();
+
+    return true;
+}
+
+bool VdrPluginWebServer::StreamEventFilter(
+        const StreamEventFilterType &input) {
+    (void)input;
+    // DSM-CC stream events are implemented in a later, separate slice.
+    return false;
+}
+
 bool VdrPluginWebServer::IsWebActive() {
     if (vdrSuiteHbbtvRuntimeService != nullptr &&
         vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive())
@@ -560,9 +585,26 @@ void cRegularWorker::Action() {
     while (Running()) {
         m_waitCondition.TimedWait(m_mutex, loopSleep);
 
-        std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
-        if (WebOSDPage::Get() == nullptr && videoPlayer != nullptr)
-            releasePlayer();
+        bool sendStatus = false;
+        std::int64_t position = -1;
+        int state = VideoPlayer::STATE_PLAYING;
+
+        {
+            std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+
+            if (WebOSDPage::Get() == nullptr && videoPlayer != nullptr)
+                releasePlayer();
+
+            if (videoPlayer != nullptr) {
+                videoPlayer->GetStatus(position, state);
+                sendStatus = true;
+            }
+        }
+
+        // Browser-side transparent video runs independently of the native
+        // decoder, so report what VDR is actually displaying.
+        if (sendStatus && browserClient != nullptr)
+            browserClient->PlayerStatus(position, state);
     }
 }
 

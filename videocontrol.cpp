@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "BrowserClient.h"
 #include "videocontrol.h"
+#include <vdr/remux.h>
 
 bool isPlayerActivated;
 
@@ -14,6 +15,7 @@ VideoPlayer::VideoPlayer() {
     pause = false;
     bufsize = 0;
     tsPlayed = false;
+    ResetStatus();
 }
 
 VideoPlayer::~VideoPlayer() {
@@ -58,6 +60,80 @@ void VideoPlayer::setVideoFullscreen() {
     cDevice::PrimaryDevice()->ScaleVideo(cRect::Null);
 }
 
+void VideoPlayer::ResetStatus() {
+    firstPts = -1;
+    lastPts = -1;
+    endOfStream = false;
+    lastStc = -1;
+    stcStall.Set();
+    lastData.Set();
+}
+
+void VideoPlayer::SetEndOfStream() {
+    dsyslog("[vdrweb] end of stream");
+    endOfStream = true;
+}
+
+// Remember the first and last video PTS carried by incoming TS packets.
+void VideoPlayer::ScanPts(const uint8_t *data, int len) {
+    for (; len >= TS_SIZE; data += TS_SIZE, len -= TS_SIZE) {
+        if (data[0] != TS_SYNC_BYTE ||
+            !TsHasPayload(data) ||
+            !TsPayloadStart(data))
+            continue;
+
+        const uchar *payload = data;
+        const int length = TsGetPayload(&payload);
+
+        if (length >= 14 &&
+            payload[0] == 0 &&
+            payload[1] == 0 &&
+            payload[2] == 1 &&
+            (payload[3] & 0xF0) == 0xE0 &&
+            PesHasPts(payload)) {
+            lastPts = PesGetPts(payload);
+            if (firstPts < 0)
+                firstPts = lastPts;
+        }
+    }
+
+    lastData.Set();
+}
+
+void VideoPlayer::GetStatus(std::int64_t &position, int &state) {
+    const std::int64_t stc = static_cast<std::int64_t>(DeviceGetSTC());
+    const bool stcValid =
+        stc >= 0 &&
+        stc != static_cast<std::int64_t>(-1) &&
+        firstPts >= 0;
+
+    if (stcValid && stc != lastStc) {
+        lastStc = stc;
+        stcStall.Set();
+    }
+
+    position = -1;
+    if (stcValid) {
+        const std::int64_t diff = PtsDiff(firstPts, stc);
+        if (diff >= 0 && diff < 24LL * 3600 * PTSTICKS)
+            position = diff / (PTSTICKS / 1000);
+    }
+
+    if (pause) {
+        state = STATE_PAUSED;
+    } else if (endOfStream &&
+               (stcValid ? stcStall.Elapsed() >= 1000
+                         : lastData.Elapsed() >= 3000)) {
+        state = STATE_ENDED;
+    } else if (!endOfStream &&
+               stcValid &&
+               stcStall.Elapsed() >= 1500) {
+        state = STATE_BUFFERING;
+    } else {
+        state = STATE_PLAYING;
+    }
+}
+
 void VideoPlayer::ResetVideo() {
     if (tsPlayed) {
         dsyslog("VideoPlayer::ResetVideo");
@@ -67,6 +143,7 @@ void VideoPlayer::ResetVideo() {
     }
 
     bufsize = 0;
+    ResetStatus();
 }
 
 void VideoPlayer::SetVideoSize(int x, int y, int width, int height) {
@@ -138,6 +215,8 @@ void VideoPlayer::PlayPacket(uint8_t *buffer, int len) {
 }
 
 bool VideoPlayer::PlayData(uint8_t *data, int len) {
+    ScanPts(data, len);
+
     // The device buffer may be full. Retry quickly for up to five seconds
     // without progress instead of sleeping 500 ms per attempt.
     int waited = 0;

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <mutex>
+#include <cstdint>
 
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
@@ -30,6 +31,10 @@ public:
     bool InsertHbbtv(const std::string& hbbtv);
     bool InsertChannel(const std::string& channel);
     bool StopVideo(const std::string& reason);
+    bool PlayerStatus(std::int64_t position, int state);
+    bool StreamEvent(int componentTag, int eventId,
+                     const std::string& privateData,
+                     const std::string& status);
 
 private:
     bool connect();
