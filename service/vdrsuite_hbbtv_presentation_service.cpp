@@ -2,6 +2,8 @@
 
 #include "../qoi.h"
 
+#include <vdr/tools.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
