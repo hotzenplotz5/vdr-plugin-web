@@ -13,6 +13,7 @@ static uchar buf[188], bufsize;
 VideoPlayer::VideoPlayer() {
     dsyslog("[vdrweb] Create Player...");
     pause = false;
+    mse = false;
     bufsize = 0;
     tsPlayed = false;
     ResetStatus();
@@ -46,7 +47,7 @@ void VideoPlayer::Pause() {
 void VideoPlayer::Resume() {
     // Only clear the decoder when resuming from an actual pause. Some HbbTV
     // applications send ResumeVideo while playback is already running.
-    if (pause) {
+    if (pause && !mse) {
         ResetVideo();
         bufsize = 0;
     }
@@ -175,7 +176,7 @@ void VideoPlayer::PlayPacket(uint8_t *buffer, int len) {
     tsError = false;
 
     // if player is paused, discard all incoming packets
-    if (pause) {
+    if (pause && !mse) {
         return;
     }
 
