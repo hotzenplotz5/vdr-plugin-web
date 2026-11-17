@@ -3,8 +3,11 @@
 #include <string>
 #include <map>
 #include <thread>
+#include <mutex>
 #include <vdr/osdbase.h>
 #include <vdr/player.h>
+
+extern std::recursive_mutex pixmap_mutex;
 
 enum OSD_MODE {
     OSD,
