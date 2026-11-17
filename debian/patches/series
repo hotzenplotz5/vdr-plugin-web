@@ -3,4 +3,3 @@
 # packaging/seahawk/prepare-source.sh separately reconstructs the old pinned
 # Seahawk upstream tarball and explicitly appends those four patches there.
 enable_fastscale.patch
-fix_thrift-services_ftbs.patch

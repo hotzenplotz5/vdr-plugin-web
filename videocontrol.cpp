@@ -40,8 +40,12 @@ void VideoPlayer::Pause() {
 }
 
 void VideoPlayer::Resume() {
-    ResetVideo();
-    bufsize = 0;
+    // Only clear the decoder when resuming from an actual pause. Some HbbTV
+    // applications send ResumeVideo while playback is already running.
+    if (pause) {
+        ResetVideo();
+        bufsize = 0;
+    }
 
     DevicePlay();
     pause = false;
@@ -93,72 +97,79 @@ void VideoPlayer::PlayPacket(uint8_t *buffer, int len) {
 
     // if player is paused, discard all incoming packets
     if (pause) {
-        // drop all packets if video is paused
         return;
     }
 
-    if (len) { // at least one tspacket
-        // play saved partial packet
-        if (bufsize) {
-            memcpy(buf + bufsize, buffer, 188 - bufsize);
-            if (videoPlayer != nullptr) {
-                PlayTs(buf, 188);
-            } else {
-                return;
-            }
-
-            buffer += 188 - bufsize;
-            len -= 188 - bufsize;
-            bufsize = 0;
-        }
-
-        // save partial packet
-        int rest = len % 188;
-        if (rest) {
-            memcpy(buf, buffer + len - rest, rest);
-            len -= rest;
-            bufsize = rest;
-        }
-
-        // now play packets
-        int retry_loop_count = 0;
-        while (len >= 188) {
-            int result = -1;
-            if (videoPlayer != nullptr) {
-                result = PlayTs(buffer, len);
-            } else {
-                return;
-            }
-
-            // play error.
-            if (result < 0) {
-                tsError = true;
-                return;
-            }
-
-            // packets not played
-            if (result == 0) {
-                // retry after some time, but increase retry_loop_count
-                if (retry_loop_count >= 10) {
-                    tsError = true;
-                    return;
-                } else {
-                    retry_loop_count++;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-                    continue;
-                }
-            }
-
-            // packets accepted
-            len -= result;
-            buffer += result;
-
-            tsPlayed = true;
-        }
+    if (len <= 0) {
+        return;
     }
 
+    // play saved partial packet
+    if (bufsize) {
+        const int missing = 188 - bufsize;
+        if (len < missing) {
+            memcpy(buf + bufsize, buffer, len);
+            bufsize += len;
+            return;
+        }
 
+        memcpy(buf + bufsize, buffer, missing);
+        if (!PlayData(buf, 188)) {
+            bufsize = 0;
+            return;
+        }
+
+        buffer += missing;
+        len -= missing;
+        bufsize = 0;
+    }
+
+    // save partial packet
+    const int rest = len % 188;
+    if (rest) {
+        memcpy(buf, buffer + len - rest, rest);
+        len -= rest;
+        bufsize = rest;
+    }
+
+    PlayData(buffer, len);
+}
+
+bool VideoPlayer::PlayData(uint8_t *data, int len) {
+    // The device buffer may be full. Retry quickly for up to five seconds
+    // without progress instead of sleeping 500 ms per attempt.
+    int waited = 0;
+
+    while (len >= 188) {
+        if (videoPlayer == nullptr) {
+            return false;
+        }
+
+        const int result = PlayTs(data, len);
+
+        if (result < 0) {
+            tsError = true;
+            return false;
+        }
+
+        if (result == 0) {
+            if (waited >= 5000) {
+                tsError = true;
+                return false;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            waited += 5;
+            continue;
+        }
+
+        len -= result;
+        data += result;
+        waited = 0;
+        tsPlayed = true;
+    }
+
+    return true;
 }
 
 void VideoPlayer::SelectAudioTrack(std::string track) {

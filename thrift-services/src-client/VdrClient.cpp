@@ -3,6 +3,8 @@
 
 #include "debuglog.h"
 #include "VdrClient.h"
+#include <thrift/TOutput.h>
+#include "TransportBuffer.h"
 
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
@@ -18,34 +20,32 @@ void vdrClientOutputFunction(const char* msg) {
 VdrClient::VdrClient(std::string vdrIp, int vdrPort) {
     DEBUGLOG("Construct VdrClient");
 
-    std::shared_ptr<TTransport> socket(new TSocket(vdrIp, vdrPort));
-    transport = static_cast<const std::shared_ptr<TTransport>>(new TBufferedTransport(socket));
+    socket = std::make_shared<TSocket>(vdrIp, vdrPort);
+    socket->setConnTimeout(3000);
+    socket->setSendTimeout(10000);
+    socket->setRecvTimeout(10000);
+    transport = std::make_shared<TBufferedTransport>(
+        socket, THRIFT_TRANSPORT_BUFFER_SIZE, THRIFT_TRANSPORT_BUFFER_SIZE);
     std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
 
     client = new VdrPluginWebClient(protocol);
 
-    TOutput::instance().setOutputFunction(vdrClientOutputFunction);
+    GlobalOutput.setOutputFunction(vdrClientOutputFunction);
 }
 
 VdrClient::~VdrClient() {
     DEBUGLOG("Destruct VdrClient");
 
-    if (transport->isOpen()) {
-        transport->close();
-    }
-
+    // Do not flush a potentially broken buffered transport here.
+    socket->close();
     delete client;
 }
 
 bool VdrClient::connect() {
-    // DEBUGLOG("VdrClient::connect");
-
     if (!transport->isOpen()) {
-        // connection closed. Try to connect
         try {
             transport->open();
-        } catch (TTransportException& err) {
-            // connection not possible
+        } catch (TTransportException&) {
             return false;
         }
     }
@@ -53,18 +53,27 @@ bool VdrClient::connect() {
     return true;
 }
 
+void VdrClient::reset() {
+    socket->close();
+    transport = std::make_shared<TBufferedTransport>(
+        socket, THRIFT_TRANSPORT_BUFFER_SIZE, THRIFT_TRANSPORT_BUFFER_SIZE);
+    delete client;
+    client = new VdrPluginWebClient(std::make_shared<TBinaryProtocol>(transport));
+}
+
 bool VdrClient::ping() {
-    if (!connect()) {
+    std::lock_guard<std::recursive_mutex> lock(vdr_send_mutex);
+
+    if (!connect())
         return false;
-    }
 
     try {
         client->ping();
         return true;
-    } catch (OperationFailed &err) {
+    } catch (OperationFailed&) {
         return false;
-    } catch (TException &err) {
-        transport->close();
+    } catch (TException&) {
+        reset();
         return false;
     }
 }
@@ -72,20 +81,26 @@ bool VdrClient::ping() {
 template <typename F> bool VdrClient::processInternal(F&& request) {
     std::lock_guard<std::recursive_mutex> lock(vdr_send_mutex);
 
-    if (!ping()) {
-        return false;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (!connect())
+            return false;
+
+        try {
+            return request();
+        } catch (OperationFailed&) {
+            return false;
+        } catch (TTransportException &err) {
+            reset();
+            if (err.getType() == TTransportException::TIMED_OUT)
+                return false;
+        } catch (TException&) {
+            reset();
+            return false;
+        }
     }
 
-    try {
-        return request();
-    } catch (OperationFailed &err) {
-        return false;
-    } catch (TException &err) {
-        transport->close();
-        return false;
-    }
+    return false;
 }
-
 bool VdrClient::ProcessOsdUpdate(int disp_width, int disp_height, int x, int y, int width, int height, std::string& data) {
     // DEBUGLOG("VdrClient::ProcessOsdUpdate");
 

@@ -444,5 +444,7 @@ void WebOSDPage::DeleteVolume(void) {
 cOsdObject *WebOSDPage::GetInfo() {
     dsyslog("[vdrweb] WebOSDPage::GetInfo...");
 
-    return this;
+    // VDR deletes the object returned by GetInfo() when the info menu closes.
+    // Returning this would delete the running player control.
+    return nullptr;
 }

@@ -77,7 +77,7 @@ jobs:
           test -f debian/patches/0003-vdrsuite-hbbtv-presentation-media.patch
           test -f debian/patches/0004-vdrsuite-hbbtv-tests-and-cef-tools.patch
           sed '/^[[:space:]]*#/d;/^[[:space:]]*$/d' debian/patches/series |
-            diff -u - <(printf '%s\n' enable_fastscale.patch fix_thrift-services_ftbs.patch)
+            diff -u - <(printf '%s\n' enable_fastscale.patch)
           test "$(cat debian/source/format)" = '3.0 (quilt)'
           echo 'INTEGRATED_HBBTV_NO_DUPLICATE_QUILT=PASS'
       - name: Create exact-source orig fixture, roundtrip Debian DSC and build as unprivileged user
