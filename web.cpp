@@ -585,9 +585,26 @@ void cRegularWorker::Action() {
     while (Running()) {
         m_waitCondition.TimedWait(m_mutex, loopSleep);
 
-        std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
-        if (WebOSDPage::Get() == nullptr && videoPlayer != nullptr)
-            releasePlayer();
+        bool sendStatus = false;
+        std::int64_t position = -1;
+        int state = VideoPlayer::STATE_PLAYING;
+
+        {
+            std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+
+            if (WebOSDPage::Get() == nullptr && videoPlayer != nullptr)
+                releasePlayer();
+
+            if (videoPlayer != nullptr) {
+                videoPlayer->GetStatus(position, state);
+                sendStatus = true;
+            }
+        }
+
+        // Browser-side transparent video runs independently of the native
+        // decoder, so report what VDR is actually displaying.
+        if (sendStatus && browserClient != nullptr)
+            browserClient->PlayerStatus(position, state);
     }
 }
 
