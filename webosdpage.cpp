@@ -3,6 +3,7 @@
 #include <Magick++/Blob.h>
 #include <Magick++/Image.h>
 #include <chrono>
+#include <cstdint>
 #include <mutex>
 #include "webosdpage.h"
 #include "web.h"
