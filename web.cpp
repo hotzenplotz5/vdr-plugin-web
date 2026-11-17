@@ -501,6 +501,31 @@ bool VdrPluginWebServer::SelectAudioTrack(const SelectAudioTrackType &input) {
     return VideoPlayer::SelectTrack(false, atoi(input.audioTrack.c_str()));
 }
 
+bool VdrPluginWebServer::SelectSubtitleTrack(
+        const SelectSubtitleTrackType &input) {
+    dsyslog("[vdrweb] SelectSubtitleTrack received");
+
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+    return VideoPlayer::SelectTrack(
+        true, atoi(input.subtitleTrack.c_str()));
+}
+
+bool VdrPluginWebServer::EndOfStream() {
+    std::lock_guard<std::recursive_mutex> playerLock(playerMutex);
+
+    if (videoPlayer != nullptr)
+        videoPlayer->SetEndOfStream();
+
+    return true;
+}
+
+bool VdrPluginWebServer::StreamEventFilter(
+        const StreamEventFilterType &input) {
+    (void)input;
+    // DSM-CC stream events are implemented in a later, separate slice.
+    return false;
+}
+
 bool VdrPluginWebServer::IsWebActive() {
     if (vdrSuiteHbbtvRuntimeService != nullptr &&
         vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive())
