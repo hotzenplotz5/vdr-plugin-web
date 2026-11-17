@@ -14,6 +14,8 @@ public:
     void Pause();
     void Resume();
 
+    void SetMse(bool on) { mse = on; }
+
     void PlayPacket(uint8_t *buffer, int len);
     static void SetVideoSize(int x, int y, int width, int height);
     static void setVideoFullscreen();
@@ -44,6 +46,7 @@ private:
 
 private:
     bool pause;
+    bool mse;
     bool tsError;
     bool tsPlayed;
 
