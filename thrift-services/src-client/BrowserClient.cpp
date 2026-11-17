@@ -244,3 +244,15 @@ bool BrowserClient::StreamEvent(int componentTag, int eventId,
         return client->StreamEvent(input);
     });
 }
+
+bool BrowserClient::SetRenderParameters(int width, int frameRate) {
+    DEBUGLOG("BrowserClient::SetRenderParameters: width %d, frame rate %d",
+             width, frameRate);
+
+    return processInternal([&]() -> bool {
+        RenderParametersType input;
+        input.width = width;
+        input.frameRate = frameRate;
+        return client->SetRenderParameters(input);
+    });
+}

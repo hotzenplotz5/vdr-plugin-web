@@ -133,6 +133,21 @@ bool VdrClient::ProcessOsdUpdateQoi(int disp_width, int disp_height, int x, int 
     });
 }
 
+bool VdrClient::ProcessOsdFrame(
+        int render_width,
+        int render_height,
+        bool qoi,
+        const std::vector<OsdRectType>& rects) {
+    return processInternal([&]() -> bool {
+        ProcessOsdFrameType input;
+        input.render_width = render_width;
+        input.render_height = render_height;
+        input.qoi = qoi;
+        input.rects = rects;
+        return client->ProcessOsdFrame(input);
+    });
+}
+
 bool VdrClient::ProcessTSPacket(std::string& packets) {
     // DEBUGLOG("VdrClient::ProcessTSPacket");
 
