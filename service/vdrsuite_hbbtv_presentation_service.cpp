@@ -27,13 +27,33 @@ struct PresentationState {
     std::uint32_t renderHeight = 0;
     std::uint64_t frameRevision = 0;
     std::uint64_t observedAt = 0;
-    std::uint64_t encodedRevision = 0;
     std::size_t visibleAlphaPixels = 0;
     bool closePending = false;
     std::uint64_t closeAfterRevision = 0;
     std::uint64_t closeDeadlineMilliseconds = 0;
     std::vector<std::uint8_t> bgra;
+
+    // Stable encoded snapshot selected by the latest META request.
+    std::uint64_t encodedRevision = 0;
+    std::uint64_t encodedBaseRevision = 0;
+    std::uint64_t encodedObservedAt = 0;
+    std::size_t encodedVisibleAlphaPixels = 0;
+    std::uint8_t encodedFrameKind = VDRWEB_HBBTV_PRESENTATION_FRAME_NONE;
+    std::uint32_t encodedRenderWidth = 0;
+    std::uint32_t encodedRenderHeight = 0;
+    std::uint32_t encodedX = 0;
+    std::uint32_t encodedY = 0;
+    std::uint32_t encodedWidth = 0;
+    std::uint32_t encodedHeight = 0;
     std::vector<std::uint8_t> encodedQoi;
+
+    // Bounding rectangle of all changes since the last selected snapshot.
+    bool dirty = false;
+    std::uint64_t dirtyBaseRevision = 0;
+    std::uint32_t dirtyX = 0;
+    std::uint32_t dirtyY = 0;
+    std::uint32_t dirtyRight = 0;
+    std::uint32_t dirtyBottom = 0;
 };
 
 std::mutex presentationMutex;
@@ -69,8 +89,8 @@ void copyText(char (&target)[N], const std::string& source)
 }
 
 void resetResponse(
-    VdrWebHbbtvPresentationV1& response,
-    const VdrWebHbbtvPresentationV1& request)
+    VdrWebHbbtvPresentationV2& response,
+    const VdrWebHbbtvPresentationV2& request)
 {
     std::memset(&response, 0, sizeof(response));
     response.structSize = sizeof(response);
@@ -85,7 +105,7 @@ void resetResponse(
     copyText(
         response.sessionId,
         std::string(request.sessionId, sessionLength));
-    response.schemaVersion = VDRWEB_HBBTV_PRESENTATION_SCHEMA_V1;
+    response.schemaVersion = VDRWEB_HBBTV_PRESENTATION_SCHEMA_V2;
     response.result = VDRWEB_HBBTV_PRESENTATION_RESULT_INVALID_REQUEST;
 }
 
@@ -110,7 +130,34 @@ bool validDimensions(
     return true;
 }
 
-bool ensureEncodedSnapshot(PresentationState& state)
+void includeDirtyRect(
+    PresentationState& state,
+    std::uint32_t x,
+    std::uint32_t y,
+    std::uint32_t width,
+    std::uint32_t height)
+{
+    const std::uint32_t right = x + width;
+    const std::uint32_t bottom = y + height;
+    if (!state.dirty)
+    {
+        state.dirty = true;
+        state.dirtyX = x;
+        state.dirtyY = y;
+        state.dirtyRight = right;
+        state.dirtyBottom = bottom;
+        return;
+    }
+
+    state.dirtyX = std::min(state.dirtyX, x);
+    state.dirtyY = std::min(state.dirtyY, y);
+    state.dirtyRight = std::max(state.dirtyRight, right);
+    state.dirtyBottom = std::max(state.dirtyBottom, bottom);
+}
+
+bool encodeSnapshot(
+    PresentationState& state,
+    std::uint64_t knownRevision)
 {
     if (state.frameRevision == 0 ||
         state.bgra.empty() ||
@@ -120,15 +167,28 @@ bool ensureEncodedSnapshot(PresentationState& state)
         return false;
     }
 
-    if (state.encodedRevision == state.frameRevision &&
-        !state.encodedQoi.empty())
+    const bool canPatch =
+        knownRevision != 0 &&
+        state.dirty &&
+        state.dirtyBaseRevision == knownRevision;
+
+    const std::uint32_t x = canPatch ? state.dirtyX : 0U;
+    const std::uint32_t y = canPatch ? state.dirtyY : 0U;
+    const std::uint32_t width =
+        canPatch ? state.dirtyRight - state.dirtyX : state.renderWidth;
+    const std::uint32_t height =
+        canPatch ? state.dirtyBottom - state.dirtyY : state.renderHeight;
+
+    if (width == 0 || height == 0 ||
+        x > state.renderWidth - width ||
+        y > state.renderHeight - height)
     {
-        return true;
+        return false;
     }
 
     const std::size_t pixelCount =
-        static_cast<std::size_t>(state.renderWidth) *
-        static_cast<std::size_t>(state.renderHeight);
+        static_cast<std::size_t>(width) *
+        static_cast<std::size_t>(height);
     if (pixelCount >
         std::numeric_limits<std::size_t>::max() / 4U)
     {
@@ -136,18 +196,29 @@ bool ensureEncodedSnapshot(PresentationState& state)
     }
 
     std::vector<std::uint8_t> rgba(pixelCount * 4U);
-    for (std::size_t index = 0; index < pixelCount; ++index)
+    const std::size_t sourceStride =
+        static_cast<std::size_t>(state.renderWidth) * 4U;
+
+    for (std::uint32_t row = 0; row < height; ++row)
     {
-        const std::size_t offset = index * 4U;
-        rgba[offset + 0U] = state.bgra[offset + 2U];
-        rgba[offset + 1U] = state.bgra[offset + 1U];
-        rgba[offset + 2U] = state.bgra[offset + 0U];
-        rgba[offset + 3U] = state.bgra[offset + 3U];
+        for (std::uint32_t column = 0; column < width; ++column)
+        {
+            const std::size_t sourceOffset =
+                (static_cast<std::size_t>(y + row) * sourceStride) +
+                static_cast<std::size_t>(x + column) * 4U;
+            const std::size_t destinationOffset =
+                (static_cast<std::size_t>(row) * width + column) * 4U;
+
+            rgba[destinationOffset + 0U] = state.bgra[sourceOffset + 2U];
+            rgba[destinationOffset + 1U] = state.bgra[sourceOffset + 1U];
+            rgba[destinationOffset + 2U] = state.bgra[sourceOffset + 0U];
+            rgba[destinationOffset + 3U] = state.bgra[sourceOffset + 3U];
+        }
     }
 
     qoi_desc description{
-        state.renderWidth,
-        state.renderHeight,
+        width,
+        height,
         4,
         QOI_SRGB
     };
@@ -168,16 +239,31 @@ bool ensureEncodedSnapshot(PresentationState& state)
     if (size > MaximumEncodedBytes)
     {
         free(encoded);
-        state.encodedQoi.clear();
-        state.encodedRevision = 0;
         return false;
     }
 
     const auto* bytes =
         static_cast<const std::uint8_t*>(encoded);
     state.encodedQoi.assign(bytes, bytes + size);
-    state.encodedRevision = state.frameRevision;
     free(encoded);
+
+    state.encodedRevision = state.frameRevision;
+    state.encodedBaseRevision = canPatch ? knownRevision : 0;
+    state.encodedObservedAt = state.observedAt;
+    state.encodedVisibleAlphaPixels = state.visibleAlphaPixels;
+    state.encodedFrameKind =
+        canPatch
+            ? VDRWEB_HBBTV_PRESENTATION_FRAME_PATCH
+            : VDRWEB_HBBTV_PRESENTATION_FRAME_FULL;
+    state.encodedRenderWidth = state.renderWidth;
+    state.encodedRenderHeight = state.renderHeight;
+    state.encodedX = x;
+    state.encodedY = y;
+    state.encodedWidth = width;
+    state.encodedHeight = height;
+
+    state.dirty = false;
+    state.dirtyBaseRevision = state.encodedRevision;
     return true;
 }
 
@@ -323,9 +409,22 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
         presentation.renderHeight = rh;
         presentation.bgra.assign(pixelCount * 4U, 0U);
         presentation.frameRevision = 0;
-        presentation.encodedRevision = 0;
         presentation.visibleAlphaPixels = 0;
+        presentation.encodedRevision = 0;
+        presentation.encodedBaseRevision = 0;
+        presentation.encodedObservedAt = 0;
+        presentation.encodedVisibleAlphaPixels = 0;
+        presentation.encodedFrameKind =
+            VDRWEB_HBBTV_PRESENTATION_FRAME_NONE;
+        presentation.encodedRenderWidth = 0;
+        presentation.encodedRenderHeight = 0;
+        presentation.encodedX = 0;
+        presentation.encodedY = 0;
+        presentation.encodedWidth = 0;
+        presentation.encodedHeight = 0;
         presentation.encodedQoi.clear();
+        presentation.dirty = false;
+        presentation.dirtyBaseRevision = 0;
     }
 
     const std::size_t sourceStride =
@@ -373,6 +472,12 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
     if (presentation.frameRevision == 0)
         presentation.frameRevision = 1;
     presentation.observedAt = unixSeconds();
+    includeDirtyRect(
+        presentation,
+        static_cast<std::uint32_t>(x),
+        static_cast<std::uint32_t>(y),
+        static_cast<std::uint32_t>(width),
+        static_cast<std::uint32_t>(height));
 
     // Keep an already encoded snapshot stable while SuiteBridge is reading
     // its chunks. A newer BGRA revision may arrive concurrently; the next
@@ -390,9 +495,9 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
 }
 
 bool VdrSuiteHbbtvPresentationStore::Read(
-    VdrWebHbbtvPresentationV1& message)
+    VdrWebHbbtvPresentationV2& message)
 {
-    const VdrWebHbbtvPresentationV1 request = message;
+    const VdrWebHbbtvPresentationV2 request = message;
     resetResponse(message, request);
 
     std::string sessionId;
@@ -412,7 +517,9 @@ bool VdrSuiteHbbtvPresentationStore::Read(
     std::lock_guard<std::mutex> lock(presentationMutex);
     if (presentation.sessionId.empty())
     {
-        dsyslog("[vdrweb] HbbTV presentation read: NO_SESSION request=%s", sessionId.c_str());
+        dsyslog(
+            "[vdrweb] HbbTV presentation read: NO_SESSION request=%s",
+            sessionId.c_str());
         message.result =
             VDRWEB_HBBTV_PRESENTATION_RESULT_NO_SESSION;
         return true;
@@ -441,43 +548,53 @@ bool VdrSuiteHbbtvPresentationStore::Read(
 
     if (request.operation == VDRWEB_HBBTV_PRESENTATION_META)
     {
-        if (!ensureEncodedSnapshot(presentation))
+        // No image bytes are needed when the consumer already has the latest
+        // revision. This also avoids re-encoding an idle full frame.
+        if (request.frameRevision == presentation.frameRevision)
+        {
+            message.frameRevision = presentation.frameRevision;
+            message.visibility =
+                presentation.visibleAlphaPixels == 0U
+                    ? VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN
+                    : VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE;
+            message.frameKind = VDRWEB_HBBTV_PRESENTATION_FRAME_NONE;
+            message.observedAt = presentation.observedAt;
+            message.baseRevision = request.frameRevision;
+            message.renderWidth = presentation.renderWidth;
+            message.renderHeight = presentation.renderHeight;
+            message.result = VDRWEB_HBBTV_PRESENTATION_RESULT_OK;
+            return true;
+        }
+
+        if (!encodeSnapshot(presentation, request.frameRevision))
         {
             message.result =
                 VDRWEB_HBBTV_PRESENTATION_RESULT_FRAME_TOO_LARGE;
             return true;
         }
 
-        message.frameRevision = presentation.encodedRevision;
-        message.visibility =
-            presentation.visibleAlphaPixels == 0U
-                ? VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN
-                : VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE;
-        message.observedAt = presentation.observedAt;
-        message.renderWidth = presentation.renderWidth;
-        message.renderHeight = presentation.renderHeight;
-        message.encodedBytes =
-            static_cast<std::uint32_t>(
-                presentation.encodedQoi.size());
-
         dsyslog(
-            "[vdrweb] HbbTV presentation meta: session=%s revision=%llu render=%ux%u encoded=%u visibleAlpha=%zu visibility=%u",
+            "[vdrweb] HbbTV presentation meta: session=%s revision=%llu base=%llu kind=%u render=%ux%u patch=%u,%u %ux%u encoded=%zu visibleAlpha=%zu visibility=%u",
             sessionId.c_str(),
             static_cast<unsigned long long>(presentation.encodedRevision),
-            presentation.renderWidth,
-            presentation.renderHeight,
-            message.encodedBytes,
-            presentation.visibleAlphaPixels,
-            static_cast<unsigned int>(message.visibility));
-        message.result =
-            VDRWEB_HBBTV_PRESENTATION_RESULT_OK;
-        return true;
+            static_cast<unsigned long long>(presentation.encodedBaseRevision),
+            static_cast<unsigned int>(presentation.encodedFrameKind),
+            presentation.encodedRenderWidth,
+            presentation.encodedRenderHeight,
+            presentation.encodedX,
+            presentation.encodedY,
+            presentation.encodedWidth,
+            presentation.encodedHeight,
+            presentation.encodedQoi.size(),
+            presentation.encodedVisibleAlphaPixels,
+            presentation.encodedVisibleAlphaPixels == 0U
+                ? static_cast<unsigned int>(
+                    VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN)
+                : static_cast<unsigned int>(
+                    VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE));
     }
-
-    // CHUNK reads must continue to serve the snapshot selected by the
-    // preceding META request even if newer BGRA patches have already arrived.
-    if (presentation.encodedQoi.empty() ||
-        request.frameRevision != presentation.encodedRevision)
+    else if (presentation.encodedQoi.empty() ||
+             request.frameRevision != presentation.encodedRevision)
     {
         message.result =
             VDRWEB_HBBTV_PRESENTATION_RESULT_REVISION_MISMATCH;
@@ -486,15 +603,26 @@ bool VdrSuiteHbbtvPresentationStore::Read(
 
     message.frameRevision = presentation.encodedRevision;
     message.visibility =
-        presentation.visibleAlphaPixels == 0U
+        presentation.encodedVisibleAlphaPixels == 0U
             ? VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN
             : VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE;
-    message.observedAt = presentation.observedAt;
-    message.renderWidth = presentation.renderWidth;
-    message.renderHeight = presentation.renderHeight;
+    message.frameKind = presentation.encodedFrameKind;
+    message.observedAt = presentation.encodedObservedAt;
+    message.baseRevision = presentation.encodedBaseRevision;
+    message.renderWidth = presentation.encodedRenderWidth;
+    message.renderHeight = presentation.encodedRenderHeight;
+    message.patchX = presentation.encodedX;
+    message.patchY = presentation.encodedY;
+    message.patchWidth = presentation.encodedWidth;
+    message.patchHeight = presentation.encodedHeight;
     message.encodedBytes =
-        static_cast<std::uint32_t>(
-            presentation.encodedQoi.size());
+        static_cast<std::uint32_t>(presentation.encodedQoi.size());
+
+    if (request.operation == VDRWEB_HBBTV_PRESENTATION_META)
+    {
+        message.result = VDRWEB_HBBTV_PRESENTATION_RESULT_OK;
+        return true;
+    }
 
     const std::size_t offset = request.offset;
     if (offset >= presentation.encodedQoi.size())
@@ -521,3 +649,4 @@ bool VdrSuiteHbbtvPresentationStore::Read(
         VDRWEB_HBBTV_PRESENTATION_RESULT_OK;
     return true;
 }
+
