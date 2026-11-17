@@ -47,8 +47,12 @@ std::map<int, std::string> keyMap({
         {kStop, "VK_STOP"},
         {kFastFwd, "VK_FAST_FWD"},
         {kFastRew, "VK_REWIND"},
-        {kNext, "VK_PAGE_DOWN"},
-        {kPrev, "VK_PAGE_UP"},
+        {kPlayPause, "VK_PLAY_PAUSE"},
+        {kRecord, "VK_RECORD"},
+        {kNext, "VK_TRACK_NEXT"},
+        {kPrev, "VK_TRACK_PREV"},
+        {kInfo, "VK_INFO"},
+        {kSubtitles, "VK_SUBTITLE"},
 });
 
 WebOSDPage *WebOSDPage::Create(bool useOutputDeviceScale, OSD_MODE osdMode) {
@@ -393,10 +397,32 @@ eOSState WebOSDPage::ProcessKey(eKeys Key) {
     if (pixmapVol && (time(NULL) - lastVolumeTime > 3))
         DeleteVolume();
 
-    auto search = ::keyMap.find(Key);
-    if (search != ::keyMap.end()) {
-        browserClient->ProcessKey(search->second);
+    if (Key & k_Release)
         return osContinue;
+
+    // Repeated keys (for example held cursor keys) use the normal key code.
+    const eKeys key = NORMALKEY(Key);
+
+    auto search = ::keyMap.find(key);
+    if (search != ::keyMap.end() &&
+        browserClient != nullptr &&
+        browserClient->ProcessKey(search->second)) {
+        return osContinue;
+    }
+
+    // If the HbbTV application does not consume a channel/numeric key, hand it
+    // back to VDR like a normal TV instead of swallowing it in the web OSD.
+    const bool isChannelKey =
+        (key >= k0 && key <= k9) ||
+        key == kChanUp ||
+        key == kChanDn ||
+        key == kChanPrev;
+
+    if (isChannelKey && !(Key & k_Repeat)) {
+        dsyslog("[vdrweb] key %d not used by application, pass to VDR",
+                static_cast<int>(key));
+        cRemote::Put(key);
+        return osEnd;
     }
 
     return osContinue;
