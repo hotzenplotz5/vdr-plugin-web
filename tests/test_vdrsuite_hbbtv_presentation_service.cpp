@@ -86,6 +86,31 @@ int main()
     }
     assert(encoded.size() == meta.encodedBytes);
 
+    // A newer provider patch must not invalidate the snapshot selected by
+    // META while the consumer is still reading its chunks.
+    const std::uint8_t concurrentPatch[] = {
+        0x00, 0xff, 0xff, 0xff
+    };
+    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+        concurrentPatch, 2, 2, 1, 0, 1, 1));
+
+    auto stableChunk = request(
+        VDRWEB_HBBTV_PRESENTATION_CHUNK,
+        "session-overlay",
+        meta.frameRevision,
+        0);
+    assert(VdrSuiteHbbtvPresentationStore::Read(stableChunk));
+    assert(stableChunk.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(stableChunk.frameRevision == meta.frameRevision);
+    assert(stableChunk.returnedBytes > 0);
+
+    auto refreshed = request(
+        VDRWEB_HBBTV_PRESENTATION_META,
+        "session-overlay");
+    assert(VdrSuiteHbbtvPresentationStore::Read(refreshed));
+    assert(refreshed.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(refreshed.frameRevision == meta.frameRevision + 1);
+
     qoi_desc description{};
     void* decoded = qoi_decode(
         encoded.data(),
@@ -121,7 +146,7 @@ int main()
     assert(
         changed.visibility ==
         VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
-    assert(changed.frameRevision == 2);
+    assert(changed.frameRevision == 3);
 
     const std::uint8_t clearPatch[] = {
         0x00, 0x00, 0x00, 0x00,
@@ -140,7 +165,7 @@ int main()
     assert(
         hidden.visibility ==
         VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN);
-    assert(hidden.frameRevision == 3);
+    assert(hidden.frameRevision == 4);
 
     assert(VdrSuiteHbbtvPresentationStore::BeginClose(
         "session-overlay", 1000));
