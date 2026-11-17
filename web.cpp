@@ -14,6 +14,7 @@
 #include <Magick++.h>
 #include <chrono>
 #include <mutex>
+#include <atomic>
 
 #include <memory>
 #include <utility>
@@ -225,6 +226,15 @@ void stopVideo() {
     }
 }
 
+// The browser may still send a few frames after an OSD page has been closed.
+// Report that transition only once until a page exists again.
+static std::atomic<bool> missingPageLogged(false);
+
+static void logMissingPage(const char *request) {
+    if (!missingPageLogged.exchange(true))
+        dsyslog("[vdrweb] %s: OSD update while no page is open", request);
+}
+
 inline OperationFailed createException(int code, std::string reason) {
     OperationFailed io;
     io.code = code;
@@ -255,12 +265,15 @@ bool VdrPluginWebServer::ProcessOsdUpdate(const ProcessOsdUpdateType &input) {
             input.width, input.height);
     }
 
+    // VDR may close and delete the page while a Thrift worker draws.
+    std::lock_guard<std::recursive_mutex> osdLock(pixmap_mutex);
+
     WebOSDPage* page = WebOSDPage::Get();
     if (page == nullptr) {
-        // illegal request -> abort
-        esyslog("[vdrweb] ProcessOsdUpdate: osd update request while webOsdPage is null.");
+        logMissingPage("ProcessOsdUpdate");
         throw createException(400, "webOsdPage is null");
     }
+    missingPageLogged = false;
 
     if (!page->drawImage((uint8_t*)input.data.c_str(), input.disp_width, input.disp_height, input.x, input.y, input.width, input.height)) {
         throw createException(400, "ProcessOsdUpdate failed");
@@ -279,12 +292,15 @@ bool VdrPluginWebServer::ProcessOsdUpdateQOI(const ProcessOsdUpdateQOIType &inpu
             input.x, input.y);
     }
 
+    // VDR may close and delete the page while a Thrift worker draws.
+    std::lock_guard<std::recursive_mutex> osdLock(pixmap_mutex);
+
     WebOSDPage* page = WebOSDPage::Get();
     if (page == nullptr) {
-        // illegal request -> abort
-        esyslog("[vdrweb] ProcessOsdUpdate: osd update request while webOsdPage is null.");
+        logMissingPage("ProcessOsdUpdateQOI");
         throw createException(400, "webOsdPage is null");
     }
+    missingPageLogged = false;
 
     if (!page->drawImageQOI(input.image_data, input.render_width, input.render_height, input.x, input.y)) {
         throw createException(400, "ProcessOsdUpdate failed");
@@ -894,6 +910,12 @@ cOsdObject *cPluginWeb::MainMenuAction() {
 
     LOCK_CHANNELS_READ
     const cChannel *currentChannel = Channels->GetByNumber(cDevice::CurrentChannel());
+
+    if (currentChannel == nullptr) {
+        esyslog("[vdrweb] MainMenuAction: no current channel");
+        nextOsdCommand = OPEN;
+        return nullptr;
+    }
 
     WebOSDPage* page = WebOSDPage::Create(useOutputDeviceScale, OSD);
 

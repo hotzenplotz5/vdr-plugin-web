@@ -9,6 +9,16 @@ on:
       - 'Makefile'
       - 'service/**'
       - 'thrift-services/**'
+      - 'ait.cpp'
+      - 'status.cpp'
+      - 'status.h'
+      - 'web.cpp'
+      - 'web.h'
+      - 'webosdpage.cpp'
+      - 'webosdpage.h'
+      - 'videocontrol.cpp'
+      - 'videocontrol.h'
+      - 'jsonescape.h'
       - 'tools/**'
   workflow_dispatch:
 

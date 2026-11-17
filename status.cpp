@@ -7,11 +7,13 @@
  */
 
 #include <vdr/channels.h>
+#include <string>
 #include "web.h"
 #include "status.h"
 #include "ait.h"
 #include "BrowserClient.h"
 #include "webosdpage.h"
+#include "jsonescape.h"
 #include "service/vdrsuite_hbbtv_discovery_service.h"
 
 const char *channelJson = R"(
@@ -58,7 +60,17 @@ inline const char* toChannelJson(const cChannel* channel) {
     }
 
     char *cmd;
-    asprintf(&cmd, channelJson, *channel->GetChannelID().ToString(), channelType, 1, channel->Nid(), channel->Tid(), channel->Sid(), channel->Name(), channel->Name(), 15);
+    const std::string name = jsonEscape(channel->Name());
+    asprintf(&cmd, channelJson,
+             *channel->GetChannelID().ToString(),
+             channelType,
+             1,
+             channel->Nid(),
+             channel->Tid(),
+             channel->Sid(),
+             name.c_str(),
+             name.c_str(),
+             15);
     return cmd;
 }
 
@@ -78,8 +90,10 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
    // LiveView tells whether this channel switch is for live viewing.
    if (LiveView) {
       if (device) {
-         isyslog("[vdrweb] Detaching HbbTV ait filter from device %d", device->CardIndex()+1);
+         isyslog("[vdrweb] Detaching HbbTV ait filter from device %d",
+                 device->CardIndex() + 1);
          device->Detach(aitFilter);
+         delete aitFilter;
          device = nullptr;
          aitFilter = nullptr;
          sid = -1;
@@ -91,23 +105,49 @@ void cHbbtvDeviceStatus::ChannelSwitch(const cDevice * vdrDevice, int channelNum
       if (channelNumber) {
          device = cDevice::ActualDevice();
 
+         std::string channelId;
+         std::string json;
+         {
 #if APIVERSNUM >= 20301
-         LOCK_CHANNELS_READ
-         auto channel = Channels->GetByNumber(channelNumber);
+            LOCK_CHANNELS_READ
+            auto channel = Channels->GetByNumber(channelNumber);
 #else
-         auto channel = Channels->GetByNumber(channelNumber);
+            auto channel = Channels->GetByNumber(channelNumber);
 #endif
-         sid = channel->Sid();
+            if (channel == nullptr) {
+               device = nullptr;
+               return;
+            }
 
-         VdrSuiteHbbtvDiscoveryStore::BeginChannel(
-             *channel->GetChannelID().ToString());
+            sid = channel->Sid();
+            const cString id = channel->GetChannelID().ToString();
+            if (*id == nullptr) {
+               device = nullptr;
+               sid = -1;
+               return;
+            }
 
-         const char* buffer = toChannelJson(channel);
-         browserClient->InsertChannel(buffer);
-         free((void *) buffer);
+            channelId = *id;
+            const char* buffer = toChannelJson(channel);
+            json = buffer;
+            free((void *) buffer);
+         }
+
+         VdrSuiteHbbtvDiscoveryStore::BeginChannel(channelId.c_str());
+
+         // Browser IPC must not hold VDR's channel lock.
+         if (browserClient != nullptr)
+            browserClient->InsertChannel(json);
+
+         if (device == nullptr)
+            return;
 
          device->AttachFilter(aitFilter = new cAitFilter(sid));
-         isyslog("[vdrweb] Attached HbbTV ait filter to device %d, vdrDev=%d actDev=%d, Sid=0x%04x", device->CardIndex()+1, vdrDevice->CardIndex()+1,cDevice::ActualDevice()->CardIndex()+1, sid);
+         isyslog("[vdrweb] Attached HbbTV ait filter to device %d, vdrDev=%d actDev=%d, Sid=0x%04x",
+                 device->CardIndex()+1,
+                 vdrDevice ? vdrDevice->CardIndex()+1 : -1,
+                 cDevice::ActualDevice() ? cDevice::ActualDevice()->CardIndex()+1 : -1,
+                 sid);
       }
    }
 }
