@@ -337,9 +337,25 @@ bool VdrPluginWebServer::ProcessTSPacket(const ProcessTSPacketType &input) {
 bool VdrPluginWebServer::StartVideo(const StartVideoType &input) {
     dsyslog("[vdrweb] StartVideo received");
 
-    if (!VdrSuiteHbbtvMediaStore::BeginVideo(input.videoInfo)) {
+    const bool suiteVideo =
+        VdrSuiteHbbtvMediaStore::BeginVideo(input.videoInfo);
+    if (!suiteVideo) {
         dsyslog("[vdrweb] VDR-Suite HbbTV media source unavailable");
     }
+
+    if (saveTS) {
+        // create directory if necessary
+        createTSFileName();
+        if (!MakeDirs(currentTSDir, true)) {
+            esyslog("[vdrweb]: can't create directory %s", currentTSDir);
+        }
+    }
+
+    // Suite playback already owns the stream. Keep its browser OSD alive:
+    // attaching a native player on a headless VDR destroys the control,
+    // so CEF's IsWebActive watchdog navigates away to the blank page.
+    if (suiteVideo)
+        return true;
 
     WebOSDPage* page;
     nextOsdCommand = CLOSE;
@@ -353,14 +369,6 @@ bool VdrPluginWebServer::StartVideo(const StartVideoType &input) {
 
     cControl::Launch(page);
     cControl::Attach();
-
-    if (saveTS) {
-        // create directory if necessary
-        createTSFileName();
-        if (!MakeDirs(currentTSDir, true)) {
-            esyslog("[vdrweb]: can't create directory %s", currentTSDir);
-        }
-    }
 
     return true;
 }

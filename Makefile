@@ -192,10 +192,14 @@ test-vdrsuite-hbbtv-media:
 	$(VDRSUITE_HBBTV_MEDIA_TEST)
 	rm -f $(VDRSUITE_HBBTV_MEDIA_TEST)
 
+.PHONY: test-vdrsuite-hbbtv-input-lifecycle
+test-vdrsuite-hbbtv-input-lifecycle:
+	python3 tests/test_hbbtv_video_input_lifecycle.py
+
 test-vdrsuite-hbbtv-provider-surface:
 	python3 tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
 
-test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface
+test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-input-lifecycle test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface
 
 $(SOFILE): $(OBJS)
 	@echo LD $@
