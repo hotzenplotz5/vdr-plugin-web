@@ -3,6 +3,7 @@
 #include "../qoi.h"
 
 #include <vdr/tools.h>
+#include <vdr/plugin.h>
 
 #include <algorithm>
 #include <chrono>
@@ -58,6 +59,31 @@ struct PresentationState {
 
 std::mutex presentationMutex;
 PresentationState presentation;
+
+void publishPresentationChanged(
+    const std::string& sessionId,
+    std::uint64_t frameRevision)
+{
+    if (sessionId.empty() ||
+        sessionId.size() >= VDRWEB_HBBTV_SESSION_ID_MAX ||
+        frameRevision == 0)
+    {
+        return;
+    }
+
+    VdrWebHbbtvPresentationChangedV1 event{};
+    event.structSize = sizeof(event);
+    event.schemaVersion = VDRWEB_HBBTV_PRESENTATION_CHANGED_SCHEMA_V1;
+    event.frameRevision = frameRevision;
+    std::memcpy(event.sessionId, sessionId.data(), sessionId.size());
+    event.sessionId[sessionId.size()] = '\0';
+
+    // Best-effort in-process hint only. The frame remains available through
+    // the existing bounded META/CHUNK readback contract.
+    (void)cPluginManager::CallFirstService(
+        VDRWEB_SERVICE_HBBTV_PRESENTATION_CHANGED_V1,
+        &event);
+}
 
 std::uint64_t unixSeconds()
 {
@@ -382,6 +408,9 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
         return false;
     }
 
+    std::string changedSessionId;
+    std::uint64_t changedFrameRevision = 0;
+    {
     std::lock_guard<std::mutex> lock(presentationMutex);
     if (presentation.sessionId.empty())
     {
@@ -491,6 +520,11 @@ bool VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
         width,
         height,
         presentation.visibleAlphaPixels);
+    changedSessionId = presentation.sessionId;
+    changedFrameRevision = presentation.frameRevision;
+    }
+
+    publishPresentationChanged(changedSessionId, changedFrameRevision);
     return true;
 }
 

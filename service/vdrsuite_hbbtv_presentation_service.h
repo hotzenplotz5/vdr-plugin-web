@@ -7,6 +7,8 @@
 #include <string>
 
 #define VDRWEB_SERVICE_HBBTV_PRESENTATION_V2 "VdrWeb::HbbtvPresentation-v2"
+#define VDRWEB_SERVICE_HBBTV_PRESENTATION_CHANGED_V1 "VdrWeb::HbbtvPresentationChanged-v1"
+#define VDRWEB_HBBTV_PRESENTATION_CHANGED_SCHEMA_V1 1U
 #define VDRWEB_HBBTV_PRESENTATION_SCHEMA_V2 2U
 #define VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX 49152U
 
@@ -66,6 +68,13 @@ struct VdrWebHbbtvPresentationV2 {
     std::uint32_t encodedBytes;
     std::uint32_t returnedBytes;
     std::uint8_t data[VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX];
+};
+
+struct VdrWebHbbtvPresentationChangedV1 {
+    std::uint32_t structSize;
+    std::uint32_t schemaVersion;
+    std::uint64_t frameRevision;
+    char sessionId[VDRWEB_HBBTV_SESSION_ID_MAX];
 };
 
 class VdrSuiteHbbtvPresentationStore final {
