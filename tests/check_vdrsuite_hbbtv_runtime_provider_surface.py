@@ -152,7 +152,7 @@ for required in (
 # Assert its ownership transfer instead of demanding shutdown in the UI
 # dispatcher itself (which could cause a second shutdown).
 release_start = web.find('void releasePlayer() {')
-release_end = web.find('\\n}\\n', release_start)
+release_end = web.find('\n}\n', release_start)
 if release_start < 0 or release_end < 0:
     raise SystemExit('main-thread reset helper missing')
 release_body = web[release_start:release_end]
