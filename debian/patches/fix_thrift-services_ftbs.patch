@@ -2,15 +2,16 @@ Description: Adapt Thrift diagnostics callback for Ubuntu libthrift
 Forwarded: not-needed
 --- a/thrift-services/src-client/BrowserClient.cpp
 +++ b/thrift-services/src-client/BrowserClient.cpp
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
  #include <memory>
  #include <mutex>
  #include <sys/socket.h>
++#include <string>
 +#include <thrift/TOutput.h>
  
  #include "debuglog.h"
  #include "BrowserClient.h"
-@@ -28,7 +29,7 @@
+@@ -28,7 +30,7 @@
  
      client = new CefBrowserClient(protocol);
  
