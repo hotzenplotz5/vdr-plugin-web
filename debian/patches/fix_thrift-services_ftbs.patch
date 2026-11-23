@@ -20,3 +20,23 @@ Forwarded: not-needed
  }
  
  BrowserClient::~BrowserClient() {
+--- a/thrift-services/src-client/TranscoderClient.cpp
++++ b/thrift-services/src-client/TranscoderClient.cpp
+@@ -1,6 +1,8 @@
+ #include <iostream>
+ #include <mutex>
+ #include <utility>
++#include <string>
++#include <thrift/TOutput.h>
+ 
+ #include "debuglog.h"
+ #include "TranscoderClient.h"
+@@ -28,7 +30,7 @@
+ 
+     client = new RemoteTranscoderClient(protocol);
+ 
+-    TOutput::instance().setOutputFunction(transcoderClientOutputFunction);
++    GlobalOutput.setOutputFunction(transcoderClientOutputFunction);
+ }
+ 
+ TranscoderClient::~TranscoderClient() {
