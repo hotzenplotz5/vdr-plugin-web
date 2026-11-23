@@ -137,7 +137,7 @@ main_body = web[main_start:]
 
 for required in (
     'VdrSuiteHbbtvUiCommandType::ResetPlayer',
-    'cControl::Shutdown()',
+    'releasePlayer()',
     'WebOSDPage::Create(',
     'cControl::Launch(',
     'videoPlayer->ResetVideo()',
@@ -147,6 +147,18 @@ for required in (
         raise SystemExit(
             f'MainMenuAction reset ownership missing: {required}'
         )
+
+# The upstream releasePlayer helper performs the actual control shutdown.
+# Assert its ownership transfer instead of demanding shutdown in the UI
+# dispatcher itself (which could cause a second shutdown).
+release_start = web.find('void releasePlayer() {')
+release_end = web.find('\\n}\\n', release_start)
+if release_start < 0 or release_end < 0:
+    raise SystemExit('main-thread reset helper missing')
+release_body = web[release_start:release_end]
+for required in ('cControl::Shutdown()', 'page->SetPlayer(nullptr)', 'delete copy;'):
+    if required not in release_body:
+        raise SystemExit(f'releasePlayer ownership contract missing: {required}')
 
 service_body = web[service_start:service_end]
 runtime_block_start = service_body.find(
