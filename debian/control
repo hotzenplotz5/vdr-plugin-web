@@ -1,0 +1,26 @@
+Source: vdr-plugin-web
+Section: video
+Priority: extra
+Maintainer: Alexander Grothe <seaahak1986@gmx.de>
+Uploaders: Alexander Grothe <seaahak1986@gmx.de>
+Origin: yavdr
+Build-Depends: debhelper-compat (= 12), vdr-dev (>= 2.2.0), pkg-config, gettext, libgraphicsmagick++1-dev, libboost-all-dev, libthrift-dev
+Standards-Version: 3.9.7
+Homepage: https://github.com/Zabrimus/vdr-plugin-web
+
+Package: vdr-plugin-web
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${vdr:Depends}
+Description: HBBTV plugin for VDR
+ .
+ vdr-plugin-web allows to use the HBBTV system with VDR. Currently requires cefbrowser and remotetranscode to be built manually for the system
+
+Package: vdr-plugin-web-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: vdr-plugin-web (= ${binary:Version}), ${misc:Depends}
+Description: debugging symbols for vdr-plugin-web
+ .
+ This package contains only the debugging symbols for vdr-plugin-web
+

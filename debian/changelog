@@ -1,0 +1,247 @@
+vdr-plugin-web (0.0.1+git20260827-111-34ded50-1yavdr1+vdrsuite1) unstable; urgency=medium
+
+  * Preserve Seahawk Debian packaging and original patches.
+  * Ship VDR-Suite HbbTV integration as quilt patches.
+  * Enable Seahawk Thrift compatibility fix and VDR ABI dependency.
+
+ -- hotzenplotz5 <hotzenplotz5@gmx.de>  Sat, 17 Oct 2026 10:15:00 +0000
+
+vdr-plugin-web (0.0.1+git20260827-111-34ded50-1yavdr1~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 27 Sep 2026 01:05:29 +0200
+
+vdr-plugin-web (0.0.1+git20260827-111-34ded50-1yavdr0~resolute) resolute; urgency=medium
+
+  * use new libthrift 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 30 Aug 2026 22:35:47 +0200
+
+vdr-plugin-web (0.0.1+git20260827-111-34ded50-0yavdr0~resolute) resolute; urgency=medium
+
+  * new upstream snapshot 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 30 Aug 2026 15:51:33 +0200
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-1yavdr9~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 17 May 2026 13:24:28 +0200
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-1yavdr8~resolute) resolute; urgency=medium
+
+  * fix build dependencies 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sat, 21 Mar 2026 23:09:48 +0100
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr8~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sat, 21 Mar 2026 16:11:50 +0100
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr7~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Mon, 02 Mar 2026 18:55:29 +0100
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr6~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 08 Feb 2026 13:12:10 +0100
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr5~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Fri, 06 Feb 2026 18:29:24 +0100
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr4~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 22 Jan 2026 21:20:57 +0100
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr3~resolute) resolute; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 16 Nov 2025 13:45:35 +0100
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr1~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Fri, 25 Jul 2025 00:50:25 +0200
+
+vdr-plugin-web (0.0.1+git20250723-108-5a437fe-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Wed, 23 Jul 2025 11:36:31 +0200
+
+vdr-plugin-web (0.0.1+git20250718-106-a565bb5-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 20 Jul 2025 23:03:29 +0200
+
+vdr-plugin-web (0.0.1+git20250717-105-a6fa4a8-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Fri, 18 Jul 2025 01:32:26 +0200
+
+vdr-plugin-web (0.0.1+git20250717-104-84c8432-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 17 Jul 2025 15:53:18 +0200
+
+vdr-plugin-web (0.0.1+git20250502-103-6cf3616-0yavdr1~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sat, 21 Jun 2025 19:50:40 +0200
+
+vdr-plugin-web (0.0.1+git20250502-103-6cf3616-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Fri, 02 May 2025 23:01:46 +0200
+
+vdr-plugin-web (0.0.1+git20250409-101-ba2f226-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 10 Apr 2025 07:57:08 +0200
+
+vdr-plugin-web (0.0.1+git20250404-99-12ef689-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sat, 05 Apr 2025 23:35:01 +0200
+
+vdr-plugin-web (0.0.1+git20250402-98-afa35c5-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Fri, 04 Apr 2025 00:54:06 +0200
+
+vdr-plugin-web (0.0.1+git20250321-85-e096724-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Mon, 24 Mar 2025 19:46:26 +0100
+
+vdr-plugin-web (0.0.1+git20250309-84-09ca664-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Tue, 11 Mar 2025 02:06:48 +0100
+
+vdr-plugin-web (0.0.1+git20250303-83-9c97d3d-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Wed, 05 Mar 2025 22:56:04 +0100
+
+vdr-plugin-web (0.0.1+git20250228-82-3e20372-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sat, 01 Mar 2025 01:45:11 +0100
+
+vdr-plugin-web (0.0.1+git20250220-81-9ca77e4-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sat, 22 Feb 2025 11:16:11 +0100
+
+vdr-plugin-web (0.0.1+git20250219-80-152a5e2-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Wed, 19 Feb 2025 08:53:31 +0100
+
+vdr-plugin-web (0.0.1+git20250216-79-f2ec3ec-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 16 Feb 2025 20:04:25 +0100
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr7~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Fri, 01 Nov 2024 20:24:38 +0100
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr6~jammy) jammy; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 31 Oct 2024 09:21:40 +0100
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr5~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sat, 12 Oct 2024 22:48:05 +0200
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr4~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 06 Oct 2024 21:19:15 +0200
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr3~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Fri, 27 Sep 2024 18:15:59 +0200
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr2~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Mon, 09 Sep 2024 17:50:59 +0200
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr1~noble) noble; urgency=medium
+
+  * automatic rebuild
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Mon, 15 Jul 2024 20:52:01 +0200
+
+vdr-plugin-web (0.0.1+git20240705-78-c3feb87-0yavdr0~noble) noble; urgency=medium
+
+  * new upstream snapshot
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Sun, 07 Jul 2024 01:03:44 +0200
+
+vdr-plugin-web (0.0.1+git20240202-77-d788323-2yavdr0~noble) noble; urgency=medium
+
+  * add sockets.ini file 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 27 Jun 2024 12:19:53 +0200
+
+vdr-plugin-web (0.0.1+git20240202-77-d788323-1yavdr0~noble) noble; urgency=medium
+
+  * cleanup debian dir 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 27 Jun 2024 11:56:17 +0200
+
+vdr-plugin-web (0.0.1+git20240202-77-d788323-0yavdr0~jammy) jammy; urgency=medium
+
+  * rebuild for jammy 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 27 Jun 2024 11:50:29 +0200
+
+vdr-plugin-web (0.0.1+git20240202-77-d788323-0yavdr0~noble) noble; urgency=medium
+
+  * initial build 
+
+ -- Alexander Grothe <seahawk1986@gmx.de>  Thu, 27 Jun 2024 10:32:41 +0200

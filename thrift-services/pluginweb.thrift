@@ -37,6 +37,14 @@ struct ProcessOsdFrameType {
     4: list<OsdRectType> rects
 }
 
+// the whole frame in shared memory of the same machine, BGRA
+struct ProcessOsdShmType {
+    1: i32 render_width,  // width of page
+    2: i32 render_height, // height of page
+    3: string name,       // file in /dev/shm
+    4: list<OsdRectType> rects   // the changed regions, without data
+}
+
 struct ProcessTSPacketType {
     1: binary ts;
 }
@@ -71,6 +79,19 @@ struct StreamEventFilterType {
     2: bool enable
 }
 
+// setChannel() of video/broadcast: the channel id or, without it, the DVB triplet
+struct SwitchChannelType {
+    1: string channelId,
+    2: i32 onid,
+    3: i32 tsid,
+    4: i32 sid
+}
+
+// the page shows nothing (all pixels transparent) or again something
+struct OsdEmptyType {
+    1: bool empty
+}
+
 service VdrPluginWeb extends common.CommonService {
     bool ProcessOsdUpdate(1: ProcessOsdUpdateType input) throws (1:common.OperationFailed err),
     bool ProcessOsdUpdateQOI(1: ProcessOsdUpdateQOIType input) throws (1:common.OperationFailed err),
@@ -88,5 +109,8 @@ service VdrPluginWeb extends common.CommonService {
     bool SelectSubtitleTrack(1: SelectSubtitleTrackType input) throws (1:common.OperationFailed err),
     bool EndOfStream() throws (1:common.OperationFailed err),
     bool StreamEventFilter(1: StreamEventFilterType input) throws (1:common.OperationFailed err),
-    bool ProcessOsdFrame(1: ProcessOsdFrameType input) throws (1:common.OperationFailed err)
+    bool ProcessOsdFrame(1: ProcessOsdFrameType input) throws (1:common.OperationFailed err),
+    bool SwitchChannel(1: SwitchChannelType input) throws (1:common.OperationFailed err),   // false: unknown channel or not switched
+    bool OsdEmpty(1: OsdEmptyType input) throws (1:common.OperationFailed err),
+    bool ProcessOsdShm(1: ProcessOsdShmType input) throws (1:common.OperationFailed err)   // false: shared memory not possible
 }

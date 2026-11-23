@@ -1,0 +1,151 @@
+name: HbbTV — Seahawk quilt source validation
+on:
+  push:
+    branches: ['work/packaging-seahawk-quilt-noble-20261017']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  noble-quilt-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check bash syntax
+        run: bash -n packaging/seahawk/prepare-source.sh
+      - name: Create and verify Debian source package
+        run: |
+          bash packaging/seahawk/prepare-source.sh "$RUNNER_TEMP/vdr-web-quilt-noble"
+          cd "$RUNNER_TEMP/vdr-web-quilt-noble/verified"
+          python3 tests/check_vdrsuite_hbbtv_runtime_provider_surface.py
+          python3 tests/test_cefbrowser_process_detection.py
+          python3 tests/test_cefbrowser_zdf_static_override.py
+      - name: Upload source artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vdr-plugin-web-seahawk-quilt-noble-source
+          path: |
+            ${{ runner.temp }}/vdr-web-quilt-noble/*.dsc
+            ${{ runner.temp }}/vdr-web-quilt-noble/*.orig.tar.gz
+            ${{ runner.temp }}/vdr-web-quilt-noble/*.debian.tar.bz2
+          if-no-files-found: error
+
+  noble-amd64-binaries:
+    needs: noble-quilt-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Seahawk VDR 2.8.3 and install build dependencies
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends software-properties-common
+          sudo add-apt-repository -y ppa:seahawk1986-hotmail/vdr-2.8.3
+          sudo apt-get update
+          apt-cache policy vdr-dev
+          sudo apt-get install -y --no-install-recommends \
+            build-essential debhelper dpkg-dev pkg-config gettext \
+            libgraphicsmagick++1-dev libboost-all-dev libthrift-dev \
+            vdr-dev python3
+          vdr_version="$(dpkg-query -W -f='${Version}' vdr-dev)"
+          case "$vdr_version" in
+            2.8.3-*) echo "SEAHAWK_VDR_DEV=PASS $vdr_version" ;;
+            *) echo "SEAHAWK_VDR_DEV=FAIL $vdr_version"; exit 1 ;;
+          esac
+          test "$(pkg-config --modversion vdr)" = '2.8.3'
+          echo "VDR_API=$(pkg-config --variable=apiversion vdr)"
+      - name: Compile provider tests and binary packages
+        run: |
+          set -Eeuo pipefail
+          bash packaging/seahawk/prepare-source.sh "$RUNNER_TEMP/vdr-web-binary-noble"
+          cd "$RUNNER_TEMP/vdr-web-binary-noble/verified"
+          dpkg-checkbuilddeps -B
+          make test-vdrsuite-hbbtv
+          dpkg-buildpackage -b -us -uc
+          test -s ../vdr-plugin-web_*_amd64.deb
+          echo 'BINARY_BUILD=PASS'
+          dpkg-deb --field ../vdr-plugin-web_*_amd64.deb Package Version Depends
+          dpkg-deb --field ../vdr-plugin-web_*_amd64.deb Depends | grep -Fq 'vdr-abi-2.8.3-0yavdr'
+          echo 'VDR_ABI_DEPENDENCY=PASS'
+          dpkg-deb --contents ../vdr-plugin-web_*_amd64.deb | grep -F 'libvdr-web.so.'
+          echo 'VDR_PLUGIN_BINARY_PAYLOAD=PASS'
+      - name: Upload unsigned amd64 debs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vdr-plugin-web-seahawk-quilt-noble-amd64
+          path: ${{ runner.temp }}/vdr-web-binary-noble/vdr-plugin-web_*_amd64.deb
+          if-no-files-found: error
+
+
+  resolute-amd64-binaries:
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 50
+    steps:
+      - name: Bootstrap isolated Resolute environment
+        run: |
+          set -Eeuo pipefail
+          printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d
+          chmod 0755 /usr/sbin/policy-rc.d
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git curl gzip bzip2 python3 gnupg software-properties-common
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install matching Seahawk VDR and Debian build dependencies
+        run: |
+          set -Eeuo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          test "$(dpkg --print-architecture)" = amd64
+          test "$( . /etc/os-release; printf '%s' "$VERSION_CODENAME" )" = resolute
+          add-apt-repository -y ppa:seahawk1986-hotmail/vdr-2.8.3
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential debhelper dpkg-dev pkg-config gettext \
+            libgraphicsmagick++1-dev libboost-all-dev libthrift-dev \
+            vdr vdr-dev python3
+          vdr_version="$(dpkg-query -W -f='${Version}' vdr)"
+          dev_version="$(dpkg-query -W -f='${Version}' vdr-dev)"
+          test "$vdr_version" = '2.8.3-0yavdr0~resolute'
+          test "$vdr_version" = "$dev_version"
+          test "$(pkg-config --modversion vdr)" = '2.8.3'
+          test "$(pkg-config --variable=apiversion vdr)" = '14'
+          dpkg-query -W -f='${Provides}\n' vdr | grep -Fw 'vdr-abi-2.8.3-0yavdr'
+          echo 'RESOLUTE_VDR_ABI_PREFLIGHT=PASS'
+      - name: Build and test package using non-root user
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          useradd --create-home --shell /bin/bash vdr-ci
+          install -d -m 0700 -o vdr-ci -g vdr-ci /tmp/vdr-suite-ci
+          runuser -u vdr-ci -- bash "$GITHUB_WORKSPACE/packaging/seahawk/prepare-source.sh" \
+            /tmp/vdr-suite-ci/resolute resolute
+          runuser -u vdr-ci -- bash -c '
+            set -Eeuo pipefail
+            cd /tmp/vdr-suite-ci/resolute/verified
+            dpkg-checkbuilddeps -B
+            make test-vdrsuite-hbbtv
+            dpkg-buildpackage -b -us -uc
+          '
+          debs=(/tmp/vdr-suite-ci/resolute/vdr-plugin-web_*_amd64.deb)
+          test "${#debs[@]}" -eq 1 && test -s "${debs[0]}"
+          dpkg-deb --field "${debs[0]}" Package Version Depends
+          dpkg-deb --field "${debs[0]}" Version | grep -Fx \
+            '0.0.1+git20260827-111-34ded50-1yavdr1+vdrsuite1~resolute'
+          dpkg-deb --field "${debs[0]}" Depends | grep -Fq 'vdr-abi-2.8.3-0yavdr'
+          dpkg-deb --contents "${debs[0]}" | grep -F 'libvdr-web.so.'
+          echo 'RESOLUTE_PLUGIN_BINARY=PASS'
+          echo 'RESOLUTE_VDR_ABI_DEPENDENCY=PASS'
+          install -d -- "$GITHUB_WORKSPACE/resolute-artifacts"
+          cp -- "${debs[0]}" "$GITHUB_WORKSPACE/resolute-artifacts/"
+      - name: Upload unsigned Resolute amd64 package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vdr-plugin-web-seahawk-quilt-resolute-amd64
+          path: resolute-artifacts/vdr-plugin-web_*_amd64.deb
+          if-no-files-found: error

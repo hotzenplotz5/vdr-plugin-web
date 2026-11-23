@@ -157,8 +157,7 @@ public:
             VDRWEB_HBBTV_CHANNEL_ID_MAX - 1U);
 
         if (state.receiverActive &&
-            state.channelId == bounded &&
-            state.applications.empty())
+            state.channelId == bounded)
         {
             return;
         }

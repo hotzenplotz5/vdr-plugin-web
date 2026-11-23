@@ -2,19 +2,11 @@
 #include "../qoi.h"
 
 #include <cassert>
-#include <cstdarg>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 #include <vector>
-
-// Standalone service test: vdr/tools.h logging is linked by the real plugin,
-// but the unit-test binary intentionally does not link the VDR runtime.
-int SysLogLevel = 3;
-void syslog_with_tid(int, const char*, ...)
-{
-}
 
 namespace
 {
@@ -28,13 +20,13 @@ void copyText(char (&target)[N], const char* value)
     std::memcpy(target, value, length + 1U);
 }
 
-VdrWebHbbtvPresentationV2 request(
+VdrWebHbbtvPresentationV1 request(
     std::uint8_t operation,
     const char* sessionId,
     std::uint64_t revision = 0,
     std::uint32_t offset = 0)
 {
-    VdrWebHbbtvPresentationV2 message{};
+    VdrWebHbbtvPresentationV1 message{};
     message.structSize = sizeof(message);
     message.operation = operation;
     message.frameRevision = revision;
@@ -43,27 +35,49 @@ VdrWebHbbtvPresentationV2 request(
     return message;
 }
 
-std::vector<std::uint8_t> readPayload(
-    const VdrWebHbbtvPresentationV2& meta)
+}
+
+int main()
 {
+    VdrSuiteHbbtvPresentationStore::EndSession();
+    VdrSuiteHbbtvPresentationStore::BeginSession("session-overlay");
+
+    const std::uint8_t firstPatch[] = {
+        // BGRA red, transparent.
+        0x00, 0x00, 0xff, 0xff,
+        0x9a, 0x2e, 0xfe, 0x00,
+        // BGRA green, blue.
+        0x00, 0xff, 0x00, 0xff,
+        0xff, 0x00, 0x00, 0xff,
+    };
+    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
+        firstPatch, 2, 2, 0, 0, 2, 2));
+
+    auto meta = request(
+        VDRWEB_HBBTV_PRESENTATION_META,
+        "session-overlay");
+    assert(VdrSuiteHbbtvPresentationStore::Read(meta));
+    assert(meta.schemaVersion == VDRWEB_HBBTV_PRESENTATION_SCHEMA_V1);
+    assert(meta.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(
+        meta.visibility ==
+        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
+    assert(meta.frameRevision == 1);
+    assert(meta.renderWidth == 2);
+    assert(meta.renderHeight == 2);
+    assert(meta.encodedBytes > 0);
+
     std::vector<std::uint8_t> encoded;
     std::uint32_t offset = 0;
     while (offset < meta.encodedBytes)
     {
         auto chunk = request(
             VDRWEB_HBBTV_PRESENTATION_CHUNK,
-            meta.sessionId,
+            "session-overlay",
             meta.frameRevision,
             offset);
         assert(VdrSuiteHbbtvPresentationStore::Read(chunk));
         assert(chunk.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
-        assert(chunk.frameRevision == meta.frameRevision);
-        assert(chunk.baseRevision == meta.baseRevision);
-        assert(chunk.frameKind == meta.frameKind);
-        assert(chunk.patchX == meta.patchX);
-        assert(chunk.patchY == meta.patchY);
-        assert(chunk.patchWidth == meta.patchWidth);
-        assert(chunk.patchHeight == meta.patchHeight);
         assert(chunk.returnedBytes > 0);
         encoded.insert(
             encoded.end(),
@@ -72,73 +86,27 @@ std::vector<std::uint8_t> readPayload(
         offset += chunk.returnedBytes;
     }
     assert(encoded.size() == meta.encodedBytes);
-    return encoded;
-}
 
-std::vector<std::uint8_t> decode(
-    const std::vector<std::uint8_t>& encoded,
-    std::uint32_t width,
-    std::uint32_t height)
-{
     qoi_desc description{};
-    void* pixels = qoi_decode(
+    void* decoded = qoi_decode(
         encoded.data(),
         static_cast<int>(encoded.size()),
         &description,
         4);
-    assert(pixels != nullptr);
-    assert(description.width == width);
-    assert(description.height == height);
+    assert(decoded != nullptr);
+    assert(description.width == 2);
+    assert(description.height == 2);
 
-    const std::size_t size =
-        static_cast<std::size_t>(width) *
-        static_cast<std::size_t>(height) * 4U;
-    const auto* begin = static_cast<const std::uint8_t*>(pixels);
-    std::vector<std::uint8_t> result(begin, begin + size);
-    free(pixels);
-    return result;
-}
-
-} // namespace
-
-int main()
-{
-    VdrSuiteHbbtvPresentationStore::EndSession();
-    VdrSuiteHbbtvPresentationStore::BeginSession("session-overlay");
-
-    const std::uint8_t firstPatch[] = {
-        // BGRA red, transparent, green, blue.
-        0x00, 0x00, 0xff, 0xff,
-        0x9a, 0x2e, 0xfe, 0x00,
-        0x00, 0xff, 0x00, 0xff,
-        0xff, 0x00, 0x00, 0xff,
-    };
-    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
-        firstPatch, 2, 2, 0, 0, 2, 2));
-
-    auto full = request(
-        VDRWEB_HBBTV_PRESENTATION_META,
-        "session-overlay",
-        0);
-    assert(VdrSuiteHbbtvPresentationStore::Read(full));
-    assert(full.schemaVersion == VDRWEB_HBBTV_PRESENTATION_SCHEMA_V2);
-    assert(full.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
-    assert(full.frameRevision == 1);
-    assert(full.baseRevision == 0);
-    assert(full.frameKind == VDRWEB_HBBTV_PRESENTATION_FRAME_FULL);
-    assert(full.renderWidth == 2);
-    assert(full.renderHeight == 2);
-    assert(full.patchX == 0);
-    assert(full.patchY == 0);
-    assert(full.patchWidth == 2);
-    assert(full.patchHeight == 2);
-    assert(full.encodedBytes > 0);
-
-    const auto fullPixels = decode(readPayload(full), 2, 2);
-    assert(fullPixels[0] == 0xff && fullPixels[1] == 0x00 &&
-           fullPixels[2] == 0x00 && fullPixels[3] == 0xff);
-    assert(fullPixels[4] == 0xfe && fullPixels[5] == 0x2e &&
-           fullPixels[6] == 0x9a && fullPixels[7] == 0x00);
+    const auto* rgba = static_cast<const std::uint8_t*>(decoded);
+    assert(rgba[0] == 0xff && rgba[1] == 0x00 &&
+           rgba[2] == 0x00 && rgba[3] == 0xff);
+    assert(rgba[4] == 0xfe && rgba[5] == 0x2e &&
+           rgba[6] == 0x9a && rgba[7] == 0x00);
+    assert(rgba[8] == 0x00 && rgba[9] == 0xff &&
+           rgba[10] == 0x00 && rgba[11] == 0xff);
+    assert(rgba[12] == 0x00 && rgba[13] == 0x00 &&
+           rgba[14] == 0xff && rgba[15] == 0xff);
+    free(decoded);
 
     const std::uint8_t yellow[] = {
         0x00, 0xff, 0xff, 0xff
@@ -146,70 +114,15 @@ int main()
     assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
         yellow, 2, 2, 1, 0, 1, 1));
 
-    auto patch = request(
+    auto changed = request(
         VDRWEB_HBBTV_PRESENTATION_META,
-        "session-overlay",
-        1);
-    assert(VdrSuiteHbbtvPresentationStore::Read(patch));
-    assert(patch.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
-    assert(patch.frameRevision == 2);
-    assert(patch.baseRevision == 1);
-    assert(patch.frameKind == VDRWEB_HBBTV_PRESENTATION_FRAME_PATCH);
-    assert(patch.renderWidth == 2);
-    assert(patch.renderHeight == 2);
-    assert(patch.patchX == 1);
-    assert(patch.patchY == 0);
-    assert(patch.patchWidth == 1);
-    assert(patch.patchHeight == 1);
-
-    // A newer provider patch must not invalidate the patch snapshot selected
-    // by META while the consumer is still reading revision 2.
-    const std::uint8_t cyan[] = {
-        0xff, 0xff, 0x00, 0xff
-    };
-    assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
-        cyan, 2, 2, 0, 1, 1, 1));
-
-    const auto patchPixels = decode(readPayload(patch), 1, 1);
-    assert(patchPixels[0] == 0xff);
-    assert(patchPixels[1] == 0xff);
-    assert(patchPixels[2] == 0x00);
-    assert(patchPixels[3] == 0xff);
-
-    auto nextPatch = request(
-        VDRWEB_HBBTV_PRESENTATION_META,
-        "session-overlay",
-        2);
-    assert(VdrSuiteHbbtvPresentationStore::Read(nextPatch));
-    assert(nextPatch.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
-    assert(nextPatch.frameRevision == 3);
-    assert(nextPatch.baseRevision == 2);
-    assert(nextPatch.frameKind == VDRWEB_HBBTV_PRESENTATION_FRAME_PATCH);
-    assert(nextPatch.patchX == 0);
-    assert(nextPatch.patchY == 1);
-    assert(nextPatch.patchWidth == 1);
-    assert(nextPatch.patchHeight == 1);
-
-    auto unchanged = request(
-        VDRWEB_HBBTV_PRESENTATION_META,
-        "session-overlay",
-        3);
-    assert(VdrSuiteHbbtvPresentationStore::Read(unchanged));
-    assert(unchanged.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
-    assert(unchanged.frameRevision == 3);
-    assert(unchanged.frameKind == VDRWEB_HBBTV_PRESENTATION_FRAME_NONE);
-    assert(unchanged.baseRevision == 3);
-    assert(unchanged.encodedBytes == 0);
-
-    auto staleChunk = request(
-        VDRWEB_HBBTV_PRESENTATION_CHUNK,
-        "session-overlay",
-        2,
-        0);
-    assert(VdrSuiteHbbtvPresentationStore::Read(staleChunk));
+        "session-overlay");
+    assert(VdrSuiteHbbtvPresentationStore::Read(changed));
+    assert(changed.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
     assert(
-        staleChunk.result ==
-        VDRWEB_HBBTV_PRESENTATION_RESULT_REVISION_MISMATCH);
+        changed.visibility ==
+        VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
+    assert(changed.frameRevision == 2);
 
     const std::uint8_t clearPatch[] = {
         0x00, 0x00, 0x00, 0x00,
@@ -220,18 +133,15 @@ int main()
     assert(VdrSuiteHbbtvPresentationStore::ApplyBgraPatch(
         clearPatch, 2, 2, 0, 0, 2, 2));
 
-    auto resync = request(
+    auto hidden = request(
         VDRWEB_HBBTV_PRESENTATION_META,
-        "session-overlay",
-        0);
-    assert(VdrSuiteHbbtvPresentationStore::Read(resync));
-    assert(resync.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
-    assert(resync.frameRevision == 4);
-    assert(resync.baseRevision == 0);
-    assert(resync.frameKind == VDRWEB_HBBTV_PRESENTATION_FRAME_FULL);
+        "session-overlay");
+    assert(VdrSuiteHbbtvPresentationStore::Read(hidden));
+    assert(hidden.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
     assert(
-        resync.visibility ==
+        hidden.visibility ==
         VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN);
+    assert(hidden.frameRevision == 3);
 
     assert(VdrSuiteHbbtvPresentationStore::BeginClose(
         "session-overlay", 1000));
@@ -260,6 +170,23 @@ int main()
             "session-overlay", 1003) ==
         VdrSuiteHbbtvRuntimeCloseConfirmation::Confirmed);
 
+    assert(VdrSuiteHbbtvPresentationStore::BeginClose(
+        "session-overlay", 2000));
+    assert(
+        VdrSuiteHbbtvPresentationStore::CloseConfirmation(
+            "session-overlay", 7000) ==
+        VdrSuiteHbbtvRuntimeCloseConfirmation::Failed);
+
+    auto staleChunk = request(
+        VDRWEB_HBBTV_PRESENTATION_CHUNK,
+        "session-overlay",
+        2,
+        0);
+    assert(VdrSuiteHbbtvPresentationStore::Read(staleChunk));
+    assert(
+        staleChunk.result ==
+        VDRWEB_HBBTV_PRESENTATION_RESULT_REVISION_MISMATCH);
+
     auto wrongSession = request(
         VDRWEB_HBBTV_PRESENTATION_META,
         "other-session");
@@ -278,5 +205,25 @@ int main()
         ended.result ==
         VDRWEB_HBBTV_PRESENTATION_RESULT_NO_SESSION);
 
+    // Browser QOI updates must reach the Suite with no local WebOSDPage.
+    VdrSuiteHbbtvPresentationStore::BeginSession("remote-video");
+    const unsigned char pixel[] = {0x11, 0x22, 0x33, 0xff};
+    qoi_desc desc{};
+    desc.width = desc.height = 1;
+    desc.channels = 4;
+    int encodedSize = 0;
+    void* remoteEncoded = qoi_encode(pixel, &desc, &encodedSize);
+    assert(remoteEncoded != nullptr);
+    std::string patch(static_cast<const char*>(remoteEncoded), encodedSize);
+    std::free(remoteEncoded);
+    assert(VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(patch, 2, 2, 1, 1));
+    auto remoteFrame = request(VDRWEB_HBBTV_PRESENTATION_META, "remote-video");
+    assert(VdrSuiteHbbtvPresentationStore::Read(remoteFrame));
+    assert(remoteFrame.result == VDRWEB_HBBTV_PRESENTATION_RESULT_OK);
+    assert(remoteFrame.visibility == VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE);
+    assert(!VdrSuiteHbbtvPresentationStore::ApplyQoiPatch("invalid", 2, 2, 0, 0));
+    patch[4] = 0x7f;
+    assert(!VdrSuiteHbbtvPresentationStore::ApplyQoiPatch(patch, 2, 2, 0, 0));
+    VdrSuiteHbbtvPresentationStore::EndSession("remote-video");
     return 0;
 }

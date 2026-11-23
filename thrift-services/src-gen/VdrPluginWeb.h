@@ -40,6 +40,9 @@ class VdrPluginWebIf : virtual public  ::common::CommonServiceIf {
   virtual bool EndOfStream() = 0;
   virtual bool StreamEventFilter(const StreamEventFilterType& input) = 0;
   virtual bool ProcessOsdFrame(const ProcessOsdFrameType& input) = 0;
+  virtual bool SwitchChannel(const SwitchChannelType& input) = 0;
+  virtual bool OsdEmpty(const OsdEmptyType& input) = 0;
+  virtual bool ProcessOsdShm(const ProcessOsdShmType& input) = 0;
 };
 
 class VdrPluginWebIfFactory : virtual public  ::common::CommonServiceIfFactory {
@@ -134,6 +137,18 @@ class VdrPluginWebNull : virtual public VdrPluginWebIf , virtual public  ::commo
     return _return;
   }
   bool ProcessOsdFrame(const ProcessOsdFrameType& /* input */) override {
+    bool _return = false;
+    return _return;
+  }
+  bool SwitchChannel(const SwitchChannelType& /* input */) override {
+    bool _return = false;
+    return _return;
+  }
+  bool OsdEmpty(const OsdEmptyType& /* input */) override {
+    bool _return = false;
+    return _return;
+  }
+  bool ProcessOsdShm(const ProcessOsdShmType& /* input */) override {
     bool _return = false;
     return _return;
   }
@@ -1735,6 +1750,300 @@ class VdrPluginWeb_ProcessOsdFrame_presult {
 
 };
 
+typedef struct _VdrPluginWeb_SwitchChannel_args__isset {
+  _VdrPluginWeb_SwitchChannel_args__isset() : input(false) {}
+  bool input :1;
+} _VdrPluginWeb_SwitchChannel_args__isset;
+
+class VdrPluginWeb_SwitchChannel_args {
+ public:
+
+  VdrPluginWeb_SwitchChannel_args(const VdrPluginWeb_SwitchChannel_args&);
+  VdrPluginWeb_SwitchChannel_args& operator=(const VdrPluginWeb_SwitchChannel_args&);
+  VdrPluginWeb_SwitchChannel_args() noexcept;
+
+  virtual ~VdrPluginWeb_SwitchChannel_args() noexcept;
+  SwitchChannelType input;
+
+  _VdrPluginWeb_SwitchChannel_args__isset __isset;
+
+  void __set_input(const SwitchChannelType& val);
+
+  bool operator == (const VdrPluginWeb_SwitchChannel_args & rhs) const;
+  bool operator != (const VdrPluginWeb_SwitchChannel_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const VdrPluginWeb_SwitchChannel_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class VdrPluginWeb_SwitchChannel_pargs {
+ public:
+
+
+  virtual ~VdrPluginWeb_SwitchChannel_pargs() noexcept;
+  const SwitchChannelType* input;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _VdrPluginWeb_SwitchChannel_result__isset {
+  _VdrPluginWeb_SwitchChannel_result__isset() : success(false), err(false) {}
+  bool success :1;
+  bool err :1;
+} _VdrPluginWeb_SwitchChannel_result__isset;
+
+class VdrPluginWeb_SwitchChannel_result {
+ public:
+
+  VdrPluginWeb_SwitchChannel_result(const VdrPluginWeb_SwitchChannel_result&);
+  VdrPluginWeb_SwitchChannel_result& operator=(const VdrPluginWeb_SwitchChannel_result&);
+  VdrPluginWeb_SwitchChannel_result() noexcept;
+
+  virtual ~VdrPluginWeb_SwitchChannel_result() noexcept;
+  bool success;
+   ::common::OperationFailed err;
+
+  _VdrPluginWeb_SwitchChannel_result__isset __isset;
+
+  void __set_success(const bool val);
+
+  void __set_err(const  ::common::OperationFailed& val);
+
+  bool operator == (const VdrPluginWeb_SwitchChannel_result & rhs) const;
+  bool operator != (const VdrPluginWeb_SwitchChannel_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const VdrPluginWeb_SwitchChannel_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _VdrPluginWeb_SwitchChannel_presult__isset {
+  _VdrPluginWeb_SwitchChannel_presult__isset() : success(false), err(false) {}
+  bool success :1;
+  bool err :1;
+} _VdrPluginWeb_SwitchChannel_presult__isset;
+
+class VdrPluginWeb_SwitchChannel_presult {
+ public:
+
+
+  virtual ~VdrPluginWeb_SwitchChannel_presult() noexcept;
+  bool* success;
+   ::common::OperationFailed err;
+
+  _VdrPluginWeb_SwitchChannel_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _VdrPluginWeb_OsdEmpty_args__isset {
+  _VdrPluginWeb_OsdEmpty_args__isset() : input(false) {}
+  bool input :1;
+} _VdrPluginWeb_OsdEmpty_args__isset;
+
+class VdrPluginWeb_OsdEmpty_args {
+ public:
+
+  VdrPluginWeb_OsdEmpty_args(const VdrPluginWeb_OsdEmpty_args&) noexcept;
+  VdrPluginWeb_OsdEmpty_args& operator=(const VdrPluginWeb_OsdEmpty_args&) noexcept;
+  VdrPluginWeb_OsdEmpty_args() noexcept;
+
+  virtual ~VdrPluginWeb_OsdEmpty_args() noexcept;
+  OsdEmptyType input;
+
+  _VdrPluginWeb_OsdEmpty_args__isset __isset;
+
+  void __set_input(const OsdEmptyType& val);
+
+  bool operator == (const VdrPluginWeb_OsdEmpty_args & rhs) const;
+  bool operator != (const VdrPluginWeb_OsdEmpty_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const VdrPluginWeb_OsdEmpty_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class VdrPluginWeb_OsdEmpty_pargs {
+ public:
+
+
+  virtual ~VdrPluginWeb_OsdEmpty_pargs() noexcept;
+  const OsdEmptyType* input;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _VdrPluginWeb_OsdEmpty_result__isset {
+  _VdrPluginWeb_OsdEmpty_result__isset() : success(false), err(false) {}
+  bool success :1;
+  bool err :1;
+} _VdrPluginWeb_OsdEmpty_result__isset;
+
+class VdrPluginWeb_OsdEmpty_result {
+ public:
+
+  VdrPluginWeb_OsdEmpty_result(const VdrPluginWeb_OsdEmpty_result&);
+  VdrPluginWeb_OsdEmpty_result& operator=(const VdrPluginWeb_OsdEmpty_result&);
+  VdrPluginWeb_OsdEmpty_result() noexcept;
+
+  virtual ~VdrPluginWeb_OsdEmpty_result() noexcept;
+  bool success;
+   ::common::OperationFailed err;
+
+  _VdrPluginWeb_OsdEmpty_result__isset __isset;
+
+  void __set_success(const bool val);
+
+  void __set_err(const  ::common::OperationFailed& val);
+
+  bool operator == (const VdrPluginWeb_OsdEmpty_result & rhs) const;
+  bool operator != (const VdrPluginWeb_OsdEmpty_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const VdrPluginWeb_OsdEmpty_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _VdrPluginWeb_OsdEmpty_presult__isset {
+  _VdrPluginWeb_OsdEmpty_presult__isset() : success(false), err(false) {}
+  bool success :1;
+  bool err :1;
+} _VdrPluginWeb_OsdEmpty_presult__isset;
+
+class VdrPluginWeb_OsdEmpty_presult {
+ public:
+
+
+  virtual ~VdrPluginWeb_OsdEmpty_presult() noexcept;
+  bool* success;
+   ::common::OperationFailed err;
+
+  _VdrPluginWeb_OsdEmpty_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _VdrPluginWeb_ProcessOsdShm_args__isset {
+  _VdrPluginWeb_ProcessOsdShm_args__isset() : input(false) {}
+  bool input :1;
+} _VdrPluginWeb_ProcessOsdShm_args__isset;
+
+class VdrPluginWeb_ProcessOsdShm_args {
+ public:
+
+  VdrPluginWeb_ProcessOsdShm_args(const VdrPluginWeb_ProcessOsdShm_args&);
+  VdrPluginWeb_ProcessOsdShm_args& operator=(const VdrPluginWeb_ProcessOsdShm_args&);
+  VdrPluginWeb_ProcessOsdShm_args() noexcept;
+
+  virtual ~VdrPluginWeb_ProcessOsdShm_args() noexcept;
+  ProcessOsdShmType input;
+
+  _VdrPluginWeb_ProcessOsdShm_args__isset __isset;
+
+  void __set_input(const ProcessOsdShmType& val);
+
+  bool operator == (const VdrPluginWeb_ProcessOsdShm_args & rhs) const;
+  bool operator != (const VdrPluginWeb_ProcessOsdShm_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const VdrPluginWeb_ProcessOsdShm_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class VdrPluginWeb_ProcessOsdShm_pargs {
+ public:
+
+
+  virtual ~VdrPluginWeb_ProcessOsdShm_pargs() noexcept;
+  const ProcessOsdShmType* input;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _VdrPluginWeb_ProcessOsdShm_result__isset {
+  _VdrPluginWeb_ProcessOsdShm_result__isset() : success(false), err(false) {}
+  bool success :1;
+  bool err :1;
+} _VdrPluginWeb_ProcessOsdShm_result__isset;
+
+class VdrPluginWeb_ProcessOsdShm_result {
+ public:
+
+  VdrPluginWeb_ProcessOsdShm_result(const VdrPluginWeb_ProcessOsdShm_result&);
+  VdrPluginWeb_ProcessOsdShm_result& operator=(const VdrPluginWeb_ProcessOsdShm_result&);
+  VdrPluginWeb_ProcessOsdShm_result() noexcept;
+
+  virtual ~VdrPluginWeb_ProcessOsdShm_result() noexcept;
+  bool success;
+   ::common::OperationFailed err;
+
+  _VdrPluginWeb_ProcessOsdShm_result__isset __isset;
+
+  void __set_success(const bool val);
+
+  void __set_err(const  ::common::OperationFailed& val);
+
+  bool operator == (const VdrPluginWeb_ProcessOsdShm_result & rhs) const;
+  bool operator != (const VdrPluginWeb_ProcessOsdShm_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const VdrPluginWeb_ProcessOsdShm_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _VdrPluginWeb_ProcessOsdShm_presult__isset {
+  _VdrPluginWeb_ProcessOsdShm_presult__isset() : success(false), err(false) {}
+  bool success :1;
+  bool err :1;
+} _VdrPluginWeb_ProcessOsdShm_presult__isset;
+
+class VdrPluginWeb_ProcessOsdShm_presult {
+ public:
+
+
+  virtual ~VdrPluginWeb_ProcessOsdShm_presult() noexcept;
+  bool* success;
+   ::common::OperationFailed err;
+
+  _VdrPluginWeb_ProcessOsdShm_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 class VdrPluginWebClient : virtual public VdrPluginWebIf, public  ::common::CommonServiceClient {
  public:
   VdrPluginWebClient(std::shared_ptr< ::apache::thrift::protocol::TProtocol> prot) :
@@ -1797,6 +2106,15 @@ class VdrPluginWebClient : virtual public VdrPluginWebIf, public  ::common::Comm
   bool ProcessOsdFrame(const ProcessOsdFrameType& input) override;
   void send_ProcessOsdFrame(const ProcessOsdFrameType& input);
   bool recv_ProcessOsdFrame();
+  bool SwitchChannel(const SwitchChannelType& input) override;
+  void send_SwitchChannel(const SwitchChannelType& input);
+  bool recv_SwitchChannel();
+  bool OsdEmpty(const OsdEmptyType& input) override;
+  void send_OsdEmpty(const OsdEmptyType& input);
+  bool recv_OsdEmpty();
+  bool ProcessOsdShm(const ProcessOsdShmType& input) override;
+  void send_ProcessOsdShm(const ProcessOsdShmType& input);
+  bool recv_ProcessOsdShm();
 };
 
 class VdrPluginWebProcessor : public  ::common::CommonServiceProcessor {
@@ -1824,6 +2142,9 @@ class VdrPluginWebProcessor : public  ::common::CommonServiceProcessor {
   void process_EndOfStream(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_StreamEventFilter(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_ProcessOsdFrame(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_SwitchChannel(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_OsdEmpty(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_ProcessOsdShm(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
  public:
   VdrPluginWebProcessor(::std::shared_ptr<VdrPluginWebIf> iface) :
      ::common::CommonServiceProcessor(iface),
@@ -1845,6 +2166,9 @@ class VdrPluginWebProcessor : public  ::common::CommonServiceProcessor {
     processMap_["EndOfStream"] = &VdrPluginWebProcessor::process_EndOfStream;
     processMap_["StreamEventFilter"] = &VdrPluginWebProcessor::process_StreamEventFilter;
     processMap_["ProcessOsdFrame"] = &VdrPluginWebProcessor::process_ProcessOsdFrame;
+    processMap_["SwitchChannel"] = &VdrPluginWebProcessor::process_SwitchChannel;
+    processMap_["OsdEmpty"] = &VdrPluginWebProcessor::process_OsdEmpty;
+    processMap_["ProcessOsdShm"] = &VdrPluginWebProcessor::process_ProcessOsdShm;
   }
 
   virtual ~VdrPluginWebProcessor() {}
@@ -2031,6 +2355,33 @@ class VdrPluginWebMultiface : virtual public VdrPluginWebIf, public  ::common::C
     return ifaces_[i]->ProcessOsdFrame(input);
   }
 
+  bool SwitchChannel(const SwitchChannelType& input) override {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->SwitchChannel(input);
+    }
+    return ifaces_[i]->SwitchChannel(input);
+  }
+
+  bool OsdEmpty(const OsdEmptyType& input) override {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->OsdEmpty(input);
+    }
+    return ifaces_[i]->OsdEmpty(input);
+  }
+
+  bool ProcessOsdShm(const ProcessOsdShmType& input) override {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->ProcessOsdShm(input);
+    }
+    return ifaces_[i]->ProcessOsdShm(input);
+  }
+
 };
 
 // The 'concurrent' client is a thread safe client that correctly handles
@@ -2098,6 +2449,15 @@ class VdrPluginWebConcurrentClient : virtual public VdrPluginWebIf, public  ::co
   bool ProcessOsdFrame(const ProcessOsdFrameType& input) override;
   int32_t send_ProcessOsdFrame(const ProcessOsdFrameType& input);
   bool recv_ProcessOsdFrame(const int32_t seqid);
+  bool SwitchChannel(const SwitchChannelType& input) override;
+  int32_t send_SwitchChannel(const SwitchChannelType& input);
+  bool recv_SwitchChannel(const int32_t seqid);
+  bool OsdEmpty(const OsdEmptyType& input) override;
+  int32_t send_OsdEmpty(const OsdEmptyType& input);
+  bool recv_OsdEmpty(const int32_t seqid);
+  bool ProcessOsdShm(const ProcessOsdShmType& input) override;
+  int32_t send_ProcessOsdShm(const ProcessOsdShmType& input);
+  bool recv_ProcessOsdShm(const int32_t seqid);
 };
 
 #ifdef _MSC_VER

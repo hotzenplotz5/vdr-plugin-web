@@ -69,6 +69,24 @@ int main()
         "https://example.invalid/") == 0);
     const uint64_t applicationRevision = discovered.discoveryRevision;
 
+    // VDR may re-announce the same LiveView channel while the
+    // HbbTV application is still active (for example around
+    // video/live-source transitions). That must not manufacture
+    // a new application context.
+    VdrSuiteHbbtvDiscoveryStore::BeginChannel(channel);
+
+    VdrWebHbbtvDiscoveryV1 sameChannel{};
+    requestChannel(sameChannel, channel);
+    assert(VdrSuiteHbbtvDiscoveryStore::Read(sameChannel));
+    assert(sameChannel.result == VDRWEB_HBBTV_RESULT_OK);
+    assert(sameChannel.receiverActive == 1);
+    assert(sameChannel.applicationCount == 1);
+    assert(sameChannel.discoveryRevision == applicationRevision);
+    assert(sameChannel.applications[0].applicationId == 7);
+    assert(std::strcmp(
+        sameChannel.applications[0].name,
+        "ARD HbbTV") == 0);
+
     VdrSuiteHbbtvDiscoveryStore::Upsert(
         channel,
         7,
