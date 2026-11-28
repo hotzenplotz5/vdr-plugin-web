@@ -33,7 +33,7 @@ required_web = (
     'runtimeHooks.closeConfirmation =',
     'VdrSuiteHbbtvPresentationStore::BeginSession(',
     'VdrSuiteHbbtvPresentationStore::EndSession(',
-    'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0',
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V2) == 0',
     'strcmp(Id, VDRWEB_SERVICE_HBBTV_MEDIA_V1) == 0',
     'VdrSuiteHbbtvMediaStore::BeginSession(',
     'VdrSuiteHbbtvMediaStore::BeginVideo(',
@@ -62,8 +62,10 @@ for token in required_header:
         raise SystemExit(f'runtime header: missing token: {token}')
 
 for token in (
-    '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V1 "VdrWeb::HbbtvPresentation-v1"',
+    '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V2 "VdrWeb::HbbtvPresentation-v2"',
     'VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX 49152U',
+    'VDRWEB_SERVICE_HBBTV_PRESENTATION_CHANGED_V1',
+    'VDRWEB_HBBTV_PRESENTATION_FRAME_PATCH',
     'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN',
     'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE',
     'std::uint8_t visibility;',
@@ -137,7 +139,7 @@ main_body = web[main_start:]
 
 for required in (
     'VdrSuiteHbbtvUiCommandType::ResetPlayer',
-    'cControl::Shutdown()',
+    'releasePlayer()',
     'WebOSDPage::Create(',
     'cControl::Launch(',
     'videoPlayer->ResetVideo()',
@@ -147,6 +149,18 @@ for required in (
         raise SystemExit(
             f'MainMenuAction reset ownership missing: {required}'
         )
+
+# The upstream releasePlayer helper performs the actual control shutdown.
+# Assert its ownership transfer instead of demanding shutdown in the UI
+# dispatcher itself (which could cause a second shutdown).
+release_start = web.find('void releasePlayer() {')
+release_end = web.find('\n}\n', release_start)
+if release_start < 0 or release_end < 0:
+    raise SystemExit('main-thread reset helper missing')
+release_body = web[release_start:release_end]
+for required in ('cControl::Shutdown()', 'page->SetPlayer(nullptr)', 'delete copy;'):
+    if required not in release_body:
+        raise SystemExit(f'releasePlayer ownership contract missing: {required}')
 
 service_body = web[service_start:service_end]
 runtime_block_start = service_body.find(

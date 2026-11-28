@@ -117,6 +117,14 @@ jobs:
           test "$(dpkg-deb --field "$deb" Package)" = vdr-plugin-web
           dpkg-deb --field "$deb" Depends | grep -F 'vdr-abi-2.8.3-0yavdr'
           dpkg-deb --contents "$deb" | grep -F 'libvdr-web.so.14'
+          # Load the actual package plugin into the installed VDR executable.
+          payload="$stage/plugin-payload"
+          dpkg-deb -x "$deb" "$payload"
+          plugin="$(find "$payload" -type f -name 'libvdr-web.so.14' -print -quit)"
+          test -n "$plugin"
+          vdr -L "$(dirname "$plugin")" -P "web -c $payload/etc/vdr/sockets.ini" --version | tee "$stage/vdr-plugin-version.txt"
+          grep -E '^web \(' "$stage/vdr-plugin-version.txt"
+          echo "INTEGRATED_WEB_VDR_LOAD=PASS series=$SERIES"
           dpkg-deb --contents "$deb" | grep -F 'vdr-suite-tools/apply_cefbrowser_zdf_controls_fix.py'
           echo "INTEGRATED_HBBTV_DEBIAN_DSC_BINARY=PASS series=$SERIES"
           echo 'SOURCE_TARBALL_PROVENANCE=CI_FIXTURE_NOT_LAUNCHPAD_RECIPE'

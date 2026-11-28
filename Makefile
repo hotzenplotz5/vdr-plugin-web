@@ -11,7 +11,7 @@ PLUGIN = web
 
 ### The version number of this plugin (taken from the main source file):
 
-VERSION = $(shell grep 'static const char \*VERSION *=' $(PLUGIN).cpp | awk '{ print $$6 }' | sed -e 's/[";]//g')
+VERSION = $(shell grep 'static const char \*VERSION *=' $(PLUGIN).h | awk '{ print $$6 }' | sed -e 's/[";]//g')
 
 # Debug configuration
 # Save all OSD images in /tmp with filenname osd_image_*.qoi
@@ -48,15 +48,15 @@ CXXFLAGS += -std=c++17 -Wno-overloaded-virtual
 
 # graphicsmagick
 CXXFLAGS += $(shell pkg-config --cflags GraphicsMagick++)
-LDFLAGS += $(shell pkg-config --libs GraphicsMagick++)
+LIBS += $(shell pkg-config --libs GraphicsMagick++)
 
 # thrift
 ifeq ($(USE_THRIFT_PKGCONFIG),1)
 CXXFLAGS += $(shell pkg-config --cflags thrift) -fPIC
-LDFLAGS += $(shell pkg-config --libs thrift)
+LIBS += $(shell pkg-config --libs thrift)
 else
 CXXFLAGS += -Ithrift-install/install/include -fPIC
-LDFLAGS += -Lthrift-install/install/lib -lthrift
+LIBS += -Lthrift-install/install/lib -lthrift
 endif
 
 ### The version number of VDR's plugin API:
@@ -101,11 +101,12 @@ DEFINES += -DPLUGIN_NAME_I18N='"$(PLUGIN)"' $(CONFIG)
 
 ### The object files (add further files here):
 
-OBJS = $(PLUGIN).o webosdpage.o qoi_impl.o service/vdrsuite_hbbtv_presentation_service.o service/vdrsuite_hbbtv_media_service.o status.o ait.o videocontrol.o backtrace.o \
+OBJS = $(PLUGIN).o webosdpage.o qoi_impl.o service/vdrsuite_hbbtv_presentation_service.o service/vdrsuite_hbbtv_media_service.o status.o ait.o videocontrol.o backtrace.o hbbtvhint.o streamevent.o setup.o downloadmenu.o recordings.o \
 	   thrift-services/src-gen/CommonService.o thrift-services/src-gen/common_types.o \
 	   thrift-services/src-gen/VdrPluginWeb.o thrift-services/src-gen/pluginweb_types.o \
 	   thrift-services/src-gen/CefBrowser.o thrift-services/src-gen/cefbrowser_types.o \
-	   thrift-services/src-client/BrowserClient.o
+	   thrift-services/src-gen/RemoteTranscoder.o thrift-services/src-gen/remotetranscoder_types.o \
+	   thrift-services/src-client/BrowserClient.o thrift-services/src-client/TranscoderClient.o
 
 ### The main target:
 
@@ -154,7 +155,7 @@ $(I18Npot): $(wildcard *.cpp)
 $(I18Nmsgs): $(DESTDIR)$(LOCDIR)/%/LC_MESSAGES/vdr-$(PLUGIN).mo: $(PODIR)/%.mo
 	install -D -m644 $< $@
 
-.PHONY: i18n test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface test-vdrsuite-cefbrowser-zdf-static test-vdrsuite-hbbtv
+.PHONY: i18n test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface test-vdrsuite-cefbrowser-zdf-static test-vdrsuite-hbbtv-video-input-lifecycle test-vdrsuite-hbbtv
 i18n: $(I18Nmo) $(I18Npot)
 
 install-i18n: $(I18Nmsgs)
@@ -199,11 +200,14 @@ test-vdrsuite-cefbrowser-zdf-static:
 	python3 tests/test_cefbrowser_process_detection.py
 	python3 tests/test_cefbrowser_zdf_static_override.py
 
-test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface test-vdrsuite-cefbrowser-zdf-static
+test-vdrsuite-hbbtv-video-input-lifecycle:
+	python3 tests/test_hbbtv_video_input_lifecycle.py
+
+test-vdrsuite-hbbtv: test-vdrsuite-hbbtv-video-input-lifecycle test-vdrsuite-hbbtv-discovery test-vdrsuite-hbbtv-runtime test-vdrsuite-hbbtv-presentation test-vdrsuite-hbbtv-media test-vdrsuite-hbbtv-provider-surface test-vdrsuite-cefbrowser-zdf-static
 
 $(SOFILE): $(OBJS)
 	@echo LD $@
-	$(Q)$(CXX) $(CXXFLAGS) -shared $(OBJS) $(LDFLAGS) -o $@
+	$(Q)$(CXX) $(CXXFLAGS) -shared $(OBJS) $(LDFLAGS) $(LIBS) -o $@
 
 compile-thrift-service:
 	cd thrift-services && ../thrift-install/install/bin/thrift --gen cpp -out src-gen common.thrift

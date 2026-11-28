@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: vdr-web \n"
 "Report-Msgid-Bugs-To: <see README>\n"
-"POT-Creation-Date: 2025-03-25 08:42+0100\n"
+"POT-Creation-Date: 2026-11-23 15:28+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,8 +17,252 @@ msgstr ""
 "Content-Type: text/plain; charset=ISO-8859-15\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+msgid "No download directory"
+msgstr "Kein Download-Verzeichnis eingestellt"
+
+msgid "No video or a live stream"
+msgstr "Kein Video oder ein Livestream"
+
+msgid "MediathekView is not reachable"
+msgstr "MediathekView ist nicht erreichbar"
+
+msgid "This video can't be downloaded"
+msgstr "Dieses Video kann nicht heruntergeladen werden"
+
+msgid "The download directory is not writable"
+msgstr "Das Download-Verzeichnis ist nicht beschreibbar"
+
+msgid "Not enough disk space"
+msgstr "Nicht genug Speicherplatz"
+
+msgid "Interrupted"
+msgstr "Unterbrochen"
+
+msgid "This video can't be converted"
+msgstr "Dieses Video kann nicht umgewandelt werden"
+
+msgid "The download directory is not reachable by VDR"
+msgstr "VDR erreicht das Download-Verzeichnis nicht"
+
+msgid "The recording can't be created"
+msgstr "Die Aufnahme kann nicht erstellt werden"
+
+msgid "audio description"
+msgstr "Audiodeskription"
+
+msgid "sign language"
+msgstr "Gebärdensprache"
+
+msgid "original version"
+msgstr "Originalfassung"
+
+msgid "plain language"
+msgstr "Klare Sprache"
+
+msgid "trailer"
+msgstr "Trailer"
+
+#, c-format
+msgid "Recording created: %s"
+msgstr "Aufnahme erstellt: %s"
+
+#, c-format
+msgid "Recording failed: %s"
+msgstr "Aufnahme fehlgeschlagen: %s"
+
+#, c-format
+msgid "Download finished: %s"
+msgstr "Download fertig: %s"
+
+#, c-format
+msgid "Download failed: %s"
+msgstr "Download fehlgeschlagen: %s"
+
+msgid "Recording"
+msgstr "Aufnahme"
+
+#, c-format
+msgid "Download %d%%"
+msgstr "Download %d%%"
+
+#, c-format
+msgid "%d downloads"
+msgstr "%d Downloads"
+
+msgid "Download"
+msgstr "Download"
+
+msgid "Searching in MediathekView..."
+msgstr "Suche in MediathekView..."
+
+msgid "Transcoder not available"
+msgstr "Transcoder nicht erreichbar"
+
+#, c-format
+msgid "Download started: %s"
+msgstr "Download gestartet: %s"
+
+msgid "Stream without MediathekView entry"
+msgstr "Stream ohne MediathekView-Eintrag"
+
+msgid "Other versions:"
+msgstr "Weitere Fassungen:"
+
+msgid "Downloads"
+msgstr "Downloads"
+
+msgid "conv."
+msgstr "Umw."
+
+msgid "waiting"
+msgstr "wartet"
+
+msgid "failed"
+msgstr "Fehler"
+
+msgid "recording"
+msgstr "Aufnahme"
+
+msgid "No downloads"
+msgstr "Keine Downloads"
+
+msgid "Button$Cancel"
+msgstr "Abbrechen"
+
+msgid "Button$Remove"
+msgstr "Entfernen"
+
+msgid "Button$Retry"
+msgstr "Wiederholen"
+
+msgid "Button$Delete"
+msgstr "Löschen"
+
+msgid "Button$Recording"
+msgstr "Aufnahme"
+
+msgid "Cancel download?"
+msgstr "Download abbrechen?"
+
+msgid "Delete file?"
+msgstr "Datei löschen?"
+
+msgid "Can't remove the download"
+msgstr "Download kann nicht entfernt werden"
+
+msgid "HbbTV available"
+msgstr "HbbTV verfügbar"
+
+msgid "never"
+msgstr "nie"
+
+msgid "bottom right"
+msgstr "unten rechts"
+
+msgid "bottom left"
+msgstr "unten links"
+
+msgid "top right"
+msgstr "oben rechts"
+
+msgid "top left"
+msgstr "oben links"
+
+msgid "browser default"
+msgstr "Vorgabe des Browsers"
+
+msgid "best"
+msgstr "beste"
+
+msgid "720p at most"
+msgstr "höchstens 720p"
+
+msgid "manually"
+msgstr "manuell"
+
+msgid "automatically"
+msgstr "automatisch"
+
+msgid "none"
+msgstr "keine"
+
+msgid "Key$Info"
+msgstr ""
+
+msgid "Key$Stop"
+msgstr ""
+
+msgid "Key$Blue"
+msgstr ""
+
+msgid "Show HbbTV hint"
+msgstr "Hinweis \"HbbTV verfügbar\" anzeigen"
+
+msgid "HbbTV hint duration (s)"
+msgstr "Anzeigedauer des Hinweises (s)"
+
+msgid "HbbTV hint position"
+msgstr "Position des Hinweises"
+
+msgid "Browser resolution"
+msgstr "Auflösung des Browsers"
+
+msgid "Scale by output device"
+msgstr "Skalierung durch Ausgabegerät"
+
+msgid "Browser frame rate"
+msgstr "Bildrate des Browsers"
+
+msgid "Media Source Extensions"
+msgstr "Media Source Extensions"
+
+msgid "ZDF special handling"
+msgstr "ZDF-Sonderbehandlung"
+
+msgid "OSD in shared memory"
+msgstr "OSD per Shared Memory"
+
+msgid "Max. download speed (Mbit/s)"
+msgstr "Max. Download-Geschwindigkeit (Mbit/s)"
+
+msgid "unlimited"
+msgstr "unbegrenzt"
+
+msgid "Download quality"
+msgstr "Download-Qualität"
+
+msgid "Keep free on the disk (GB)"
+msgstr "Frei lassen auf der Platte (GB)"
+
+msgid "Downloads at the same time"
+msgstr "Gleichzeitige Downloads"
+
+msgid "Downloads as recording"
+msgstr "Downloads als Aufnahme"
+
+msgid "Lifetime of the recordings"
+msgstr "Lebensdauer der Aufnahmen"
+
+msgid "Key for the downloads"
+msgstr "Taste für die Downloads"
+
+msgid "Downloads..."
+msgstr "Downloads..."
+
+msgid "Close HbbTV without display after (s)"
+msgstr "HbbTV ohne Anzeige beenden nach (s)"
+
+msgid "No HbbTV application on this channel"
+msgstr "Keine HbbTV-Anwendung auf diesem Kanal"
+
 msgid "Browser not available"
 msgstr "Der Browser ist nicht verfügbar"
+
+msgid "Start"
+msgstr "Start"
+
+msgid "Close"
+msgstr "Beenden"
 
 #~ msgid "RedButton Application not available"
 #~ msgstr "RedButton Applikation ist nicht verfügbar"

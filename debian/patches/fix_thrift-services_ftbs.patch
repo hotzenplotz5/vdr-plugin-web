@@ -1,26 +1,17 @@
-Index: vdr-plugin-web-0.0.1+git20260827-111-34ded50/thrift-services/src-client/BrowserClient.cpp
-===================================================================
---- vdr-plugin-web-0.0.1+git20260827-111-34ded50.orig/thrift-services/src-client/BrowserClient.cpp	2026-08-30 16:02:46.336860164 +0200
-+++ vdr-plugin-web-0.0.1+git20260827-111-34ded50/thrift-services/src-client/BrowserClient.cpp	2026-08-30 16:03:26.652908207 +0200
-@@ -5,6 +5,8 @@
+Description: Adapt Thrift diagnostics callback for Ubuntu libthrift
+Forwarded: not-needed
+--- a/thrift-services/src-client/BrowserClient.cpp
++++ b/thrift-services/src-client/BrowserClient.cpp
+@@ -1,6 +1,8 @@
+ #include <memory>
+ #include <mutex>
+ #include <sys/socket.h>
++#include <string>
++#include <thrift/TOutput.h>
+ 
  #include "debuglog.h"
  #include "BrowserClient.h"
- 
-+#include <thrift/TOutput.h>
-+
- using namespace apache::thrift;
- using namespace apache::thrift::protocol;
- using namespace apache::thrift::transport;
-@@ -19,14 +21,17 @@
-     DEBUGLOG("Construct BrowserClient");
- 
-     socket = std::make_shared<TSocket>(vdrIp, vdrPort);
--    transport = static_cast<const std::shared_ptr<TTransport>>(new TBufferedTransport(socket));
--    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-+
-+    transport = std::make_shared<TBufferedTransport>(socket);
-+
-+    std::shared_ptr<TProtocol> protocol = std::make_shared<TBinaryProtocol>(transport);
+@@ -28,7 +30,7 @@
  
      client = new CefBrowserClient(protocol);
  
@@ -28,7 +19,24 @@ Index: vdr-plugin-web-0.0.1+git20260827-111-34ded50/thrift-services/src-client/B
 +    GlobalOutput.setOutputFunction(browserClientOutputFunction);
  }
  
-+
  BrowserClient::~BrowserClient() {
-     DEBUGLOG("Destruct BrowserClient");
+--- a/thrift-services/src-client/TranscoderClient.cpp
++++ b/thrift-services/src-client/TranscoderClient.cpp
+@@ -1,6 +1,8 @@
+ #include <iostream>
+ #include <mutex>
+ #include <utility>
++#include <string>
++#include <thrift/TOutput.h>
  
+ #include "debuglog.h"
+ #include "TranscoderClient.h"
+@@ -28,7 +30,7 @@
+ 
+     client = new RemoteTranscoderClient(protocol);
+ 
+-    TOutput::instance().setOutputFunction(transcoderClientOutputFunction);
++    GlobalOutput.setOutputFunction(transcoderClientOutputFunction);
+ }
+ 
+ TranscoderClient::~TranscoderClient() {

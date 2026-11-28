@@ -13,7 +13,7 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${vdr:Depends}
 Description: HBBTV plugin for VDR
  .
- vdr-plugin-web allows to use the HBBTV system with VDR. Currently requires cefbrowser and remotetranscode to be built manually for the system
+ vdr-plugin-web allows to use the HBBTV system with VDR. Uses cefbrowser and remotetranscode, which may be installed separately
 
 Package: vdr-plugin-web-dbg
 Architecture: any
