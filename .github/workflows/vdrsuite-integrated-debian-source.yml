@@ -122,7 +122,7 @@ jobs:
           dpkg-deb -x "$deb" "$payload"
           plugin="$(find "$payload" -type f -name 'libvdr-web.so.14' -print -quit)"
           test -n "$plugin"
-          vdr -L "$(dirname "$plugin")" -P web --version | tee "$stage/vdr-plugin-version.txt"
+          vdr -L "$(dirname "$plugin")" -P "web -c $payload/etc/vdr/sockets.ini" --version | tee "$stage/vdr-plugin-version.txt"
           grep -E '^web \(' "$stage/vdr-plugin-version.txt"
           echo "INTEGRATED_WEB_VDR_LOAD=PASS series=$SERIES"
           dpkg-deb --contents "$deb" | grep -F 'vdr-suite-tools/apply_cefbrowser_zdf_controls_fix.py'

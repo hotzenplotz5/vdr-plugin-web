@@ -7,6 +7,7 @@
  */
 
 #include <getopt.h>
+#include <unistd.h>
 #include <vdr/plugin.h>
 #include <vdr/remote.h>
 #include <vdr/tools.h>
@@ -512,7 +513,9 @@ bool VdrPluginWebServer::VideoSize(const VideoSizeType &input) {
     dsyslog("[vdrweb] Incoming request /VideoSize with x %d, y %d, width %d, height %d", input.x, input.y, input.w, input.h);
 
     // the browser may still send the window after the application has been closed
-    if (videoWindowClosed) {
+    // A Suite-owned application can outlive the local VDR OSD.
+    if (videoWindowClosed && !(vdrSuiteHbbtvRuntimeService != nullptr &&
+        vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive())) {
         dsyslog("[vdrweb] VideoSize ignored, the application is closed");
         return true;
     }
@@ -892,8 +895,11 @@ bool cPluginWeb::ProcessArgs(int argc, char *argv[]) {
 
     if (configFilename.empty()) {
         // set default
-        isyslog("[vdrweb] Using default config file /etc/vdr/socket.ini");
-        configFilename = "/etc/vdr/socket.ini";
+        // The package and the other two components use sockets.ini.
+        // Keep the older singular path for unmanaged installations.
+        configFilename = access("/etc/vdr/sockets.ini", R_OK) == 0
+            ? "/etc/vdr/sockets.ini" : "/etc/vdr/socket.ini";
+        isyslog("[vdrweb] Using default config file %s", configFilename.c_str());
     }
 
     if (!readConfiguration(configFilename.c_str())) {
@@ -1224,6 +1230,8 @@ cOsdObject *cPluginWeb::MainMenuAction() {
                 runtimeCommand.sessionId);
             VdrSuiteHbbtvMediaStore::BeginSession(
                 runtimeCommand.sessionId);
+            videoWindowClosed = false;
+            closedVideoWindow = cRect::Null;
             SendRenderParameters();
             page = WebOSDPage::Create(useOutputDeviceScale, OSD);
             launched = browserClient->RedButton(runtimeCommand.channelId);

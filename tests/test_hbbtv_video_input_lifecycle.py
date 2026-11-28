@@ -27,7 +27,10 @@ source = r'''
 #include <cassert>
 #include <cstring>
 #include <string>
-enum { OPEN, CLOSE, PLAYER };
+#include <memory>
+#include <mutex>
+#include <atomic>
+enum { OPEN, CLOSE, PLAYER, REOPEN };
 int nextOsdCommand = OPEN, closeCalls = 0, launches = 0, saves = 0;
 bool saveTS = false, useOutputDeviceScale = false, headless = true;
 const char* currentTSDir = "unused";
@@ -35,8 +38,17 @@ void dsyslog(const char*, ...) {}
 void esyslog(const char*, ...) {}
 void createTSFileName() { ++saves; }
 bool MakeDirs(const char*, bool) { return true; }
-struct VideoPlayer {};
+std::recursive_mutex playerMutex;
+std::unique_ptr<VdrSuiteHbbtvRuntimeService> vdrSuiteHbbtvRuntimeService;
+std::string videoInfo;
+std::atomic<bool> videoWindowClosed{false};
+int lastVideoX = 0, lastVideoY = 0, lastVideoWidth = 0, lastVideoHeight = 0;
+struct VideoPlayer {
+    void SetMse(bool) {}
+    static void SetVideoSize(int, int, int, int) {}
+};
 VideoPlayer* videoPlayer = nullptr;
+void releasePlayer() { delete videoPlayer; videoPlayer = nullptr; }
 struct WebOSDPage {
     static WebOSDPage* current;
     static WebOSDPage* Get() { return current; }
@@ -61,21 +73,48 @@ struct cControl {
         }
     }
 };
-struct StartVideoType { std::string videoInfo; };
+struct StartVideoType { std::string videoInfo; bool mse = false; };
+struct VideoSizeType { int x, y, w, h; };
 struct VdrPluginWebServer {
     bool StartVideo(const StartVideoType&);
     bool IsWebActive();
+    bool VideoSize(const VideoSizeType&);
 };
 '''
 source += function('bool VdrPluginWebServer::StartVideo(') + '\n'
 source += function('bool VdrPluginWebServer::IsWebActive()') + '\n'
+source += function('bool VdrPluginWebServer::VideoSize(') + '\n'
 source += r'''
 int main() {
     VdrPluginWebServer server;
     WebOSDPage application;
     WebOSDPage::current = &application;
     assert(!VdrSuiteHbbtvMediaStore::BeginVideo("no session"));
+    const char* channel = "C-1-1051-10301";
+    VdrSuiteHbbtvDiscoveryStore::BeginChannel(channel);
+    VdrSuiteHbbtvDiscoveryStore::Upsert(channel, 1, 1, 2,
+        "HBBTV-Start", "https://example.invalid/", "start.html", "");
+    VdrWebHbbtvDiscoveryV1 discovery{};
+    discovery.structSize = sizeof(discovery);
+    std::strcpy(discovery.channelId, channel);
+    assert(VdrSuiteHbbtvDiscoveryStore::Read(discovery));
+    VdrSuiteHbbtvRuntimeHooks hooks;
+    hooks.scheduleLaunch = [](const std::string&, const std::string&) { return true; };
+    vdrSuiteHbbtvRuntimeService = std::make_unique<VdrSuiteHbbtvRuntimeService>(hooks);
+    VdrWebHbbtvRuntimeV1 launch{};
+    launch.structSize = sizeof(launch);
+    launch.operation = VDRWEB_HBBTV_RUNTIME_LAUNCH;
+    launch.applicationId = 1;
+    launch.descriptorRevision = discovery.discoveryRevision;
+    std::strcpy(launch.sessionId, "input-regression");
+    std::strcpy(launch.channelId, channel);
+    assert(vdrSuiteHbbtvRuntimeService->Handle(launch));
+    assert(vdrSuiteHbbtvRuntimeService->CompleteLaunch("input-regression", true));
     VdrSuiteHbbtvMediaStore::BeginSession("input-regression");
+    // The local OSD has closed, but Suite still owns this application.
+    videoWindowClosed = true;
+    assert(server.VideoSize({10, 20, 320, 180}));
+    assert(lastVideoWidth == 320);
     for (bool capture : {false, true}) {
         saveTS = capture;
         assert(server.StartVideo({"h264"}));
@@ -85,6 +124,7 @@ int main() {
         assert(VdrSuiteHbbtvMediaStore::Read(media));
         assert(media.state == VDRWEB_HBBTV_MEDIA_STATE_STREAMING);
         assert(media.socketPath[0] != '\0');
+        assert(media.x == 10 && media.y == 20 && media.width == 320 && media.height == 180);
         // CEF must continue to see its application as active after StartVideo.
         assert(WebOSDPage::Get() == &application);
         assert(server.IsWebActive());
@@ -95,6 +135,10 @@ int main() {
     }
     assert(saves == 1);
     VdrSuiteHbbtvMediaStore::EndSession("input-regression");
+    vdrSuiteHbbtvRuntimeService.reset();
+    assert(server.VideoSize({1, 2, 3, 4}));
+    assert(lastVideoWidth == 320); // native stale window ignored
+    videoWindowClosed = false;
     // Ordinary native playback must still be reachable without Suite ownership.
     saveTS = false;
     headless = false;
@@ -108,6 +152,8 @@ int main() {
     assert(server.StartVideo({"h264"}));
     assert(closeCalls == 2 && launches == 2);
     assert(!server.IsWebActive());
+    nextOsdCommand = REOPEN;
+    assert(server.IsWebActive());
 }
 '''
 
