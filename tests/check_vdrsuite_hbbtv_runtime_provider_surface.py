@@ -33,7 +33,7 @@ required_web = (
     'runtimeHooks.closeConfirmation =',
     'VdrSuiteHbbtvPresentationStore::BeginSession(',
     'VdrSuiteHbbtvPresentationStore::EndSession(',
-    'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0',
+    'strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V2) == 0',
     'strcmp(Id, VDRWEB_SERVICE_HBBTV_MEDIA_V1) == 0',
     'VdrSuiteHbbtvMediaStore::BeginSession(',
     'VdrSuiteHbbtvMediaStore::BeginVideo(',
@@ -62,8 +62,10 @@ for token in required_header:
         raise SystemExit(f'runtime header: missing token: {token}')
 
 for token in (
-    '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V1 "VdrWeb::HbbtvPresentation-v1"',
+    '#define VDRWEB_SERVICE_HBBTV_PRESENTATION_V2 "VdrWeb::HbbtvPresentation-v2"',
     'VDRWEB_HBBTV_PRESENTATION_CHUNK_MAX 49152U',
+    'VDRWEB_SERVICE_HBBTV_PRESENTATION_CHANGED_V1',
+    'VDRWEB_HBBTV_PRESENTATION_FRAME_PATCH',
     'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_HIDDEN',
     'VDRWEB_HBBTV_PRESENTATION_VISIBILITY_VISIBLE',
     'std::uint8_t visibility;',

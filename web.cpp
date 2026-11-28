@@ -38,6 +38,11 @@
 #include "streamevent.h"
 #include "downloadmenu.h"
 
+void VdrSuiteHbbtvPublishPresentationChanged(VdrWebHbbtvPresentationChangedV1& event) {
+    (void)cPluginManager::CallFirstService(
+        VDRWEB_SERVICE_HBBTV_PRESENTATION_CHANGED_V1, &event);
+}
+
 #define TSDIR  "%s/web/%s/%4d-%02d-%02d.%02d.%02d.%d-%d.rec"
 
 TThreadedServer *thriftServer;
@@ -1389,12 +1394,12 @@ bool cPluginWeb::Service(const char *Id, void *Data = nullptr) {
     }
 
     if (Id != nullptr &&
-        strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V1) == 0) {
+        strcmp(Id, VDRWEB_SERVICE_HBBTV_PRESENTATION_V2) == 0) {
         if (Data == nullptr)
             return false;
 
         return VdrSuiteHbbtvPresentationStore::Read(
-            *static_cast<VdrWebHbbtvPresentationV1 *>(Data));
+            *static_cast<VdrWebHbbtvPresentationV2 *>(Data));
     }
 
     if (Id != nullptr &&
