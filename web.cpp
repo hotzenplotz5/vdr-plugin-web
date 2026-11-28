@@ -242,9 +242,20 @@ void stopVideo() {
     std::lock_guard<std::recursive_mutex> lock(playerMutex);
 
     if (videoPlayer != nullptr) {
+        // The application stays open. Until VDR shows its page again there is
+        // neither a page nor a player: IsWebActive() must not report the end of
+        // the application to the browser meanwhile, it would close it.
+        nextOsdCommand = REOPEN;
+
         releasePlayer();
 
-        nextOsdCommand = REOPEN;
+        // The player switches to full screen when it goes, but the application
+        // stays open: show TV again where the application last placed the video.
+        // It may have done so already while the video was still playing.
+        if (lastVideoWidth > 0 && lastVideoHeight > 0) {
+            VideoPlayer::SetVideoSize(lastVideoX, lastVideoY, lastVideoWidth, lastVideoHeight);
+        }
+
         cRemote::CallPlugin("web");
     }
 }
@@ -472,8 +483,34 @@ bool VdrPluginWebServer::Seeked() {
     return true;
 }
 
+// Like on a TV: without the application the video is fullscreen again, and the
+// window of the application doesn't apply to the next one.
+// The window is kept for the application shown again (REOPEN, e.g. after the downloads).
+static cRect closedVideoWindow;
+// set from the close of the application until the next one is opened
+static std::atomic<bool> videoWindowClosed(false);
+
+void CloseVideoWindow() {
+    // the page is closed for a video of the application (CLOSE), not left
+    if (nextOsdCommand == CLOSE || playerWebOsdPage != nullptr) {
+        return;
+    }
+
+    dsyslog("[vdrweb] the application is closed, the video is fullscreen again");
+    closedVideoWindow.Set(lastVideoX, lastVideoY, lastVideoWidth, lastVideoHeight);
+    videoWindowClosed = true;
+    lastVideoX = lastVideoY = lastVideoWidth = lastVideoHeight = 0;
+    VideoPlayer::setVideoFullscreen();
+}
+
 bool VdrPluginWebServer::VideoSize(const VideoSizeType &input) {
     dsyslog("[vdrweb] Incoming request /VideoSize with x %d, y %d, width %d, height %d", input.x, input.y, input.w, input.h);
+
+    // the browser may still send the window after the application has been closed
+    if (videoWindowClosed) {
+        dsyslog("[vdrweb] VideoSize ignored, the application is closed");
+        return true;
+    }
 
     lastVideoX = input.x;
     lastVideoY = input.y;
@@ -547,7 +584,8 @@ bool VdrPluginWebServer::IsWebActive() {
         vdrSuiteHbbtvRuntimeService->KeepsBrowserAlive())
         return true;
     std::lock_guard<std::recursive_mutex> lock(playerMutex);
-    return (WebOSDPage::Get() != nullptr) || (videoPlayer != nullptr);
+    // REOPEN keeps the application alive between player and OSD.
+    return (WebOSDPage::Get() != nullptr) || (videoPlayer != nullptr) || nextOsdCommand == REOPEN;
 }
 
 bool VdrPluginWebServer::SelectSubtitleTrack(const SelectSubtitleTrackType &input) {
@@ -954,12 +992,13 @@ void cPluginWeb::Stop() {
     vdrSuiteHbbtvRuntimeService.reset();
     clearVdrSuiteHbbtvUiCommand();
     regularWorker->Stop();
+    // Stop the switch worker before shutting down stream events.
+    delete hbbtvDeviceStatus;
+    hbbtvDeviceStatus = nullptr;
+
     StreamEventsShutdown();
     StopDownloadWatcher();
     WebOSDPage::ReleaseShm();
-
-    delete hbbtvDeviceStatus;
-    hbbtvDeviceStatus = nullptr;
 
     BrowserClient *client = browserClient;
     browserClient = nullptr;
@@ -1242,6 +1281,8 @@ cOsdObject *cPluginWeb::MainMenuAction() {
         channelId = *currentChannel->GetChannelID().ToString();
     }
 
+    videoWindowClosed = false;
+
     // resolution and frame rate from the setup, the browser may have been restarted
     if (nextOsdCommand != REOPEN) {
         SendRenderParameters();
@@ -1252,6 +1293,16 @@ cOsdObject *cPluginWeb::MainMenuAction() {
         Skins.QueueMessage(mtInfo, browserClient->ping() ? tr("No HbbTV application on this channel") : tr("Browser not available"));
         return nullptr;
     }
+
+    // the application shown again gets its window again, it doesn't send it a second time
+    if (nextOsdCommand == REOPEN && closedVideoWindow.Width() > 0 && closedVideoWindow.Height() > 0) {
+        lastVideoX = closedVideoWindow.X();
+        lastVideoY = closedVideoWindow.Y();
+        lastVideoWidth = closedVideoWindow.Width();
+        lastVideoHeight = closedVideoWindow.Height();
+        VideoPlayer::SetVideoSize(lastVideoX, lastVideoY, lastVideoWidth, lastVideoHeight);
+    }
+    closedVideoWindow = cRect::Null;
 
     WebOSDPage* page = WebOSDPage::Create(useOutputDeviceScale, OSD);
 

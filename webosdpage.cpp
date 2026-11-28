@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vdr/device.h>
+#include <vdr/menu.h>
 #include <vdr/remote.h>
 #include <Magick++/Blob.h>
 #include <Magick++/Image.h>
@@ -150,7 +151,11 @@ WebOSDPage::~WebOSDPage() {
             break;
     }
 
-    // cDevice::PrimaryDevice()->ScaleVideo(cRect::Null);
+    // The application is left (Menu, end of the application, channel key). A video
+    // of the application has its own page and sets the video fullscreen itself.
+    if (currentMode == OSD) {
+        CloseVideoWindow();
+    }
 }
 
 void WebOSDPage::Show() {
@@ -746,6 +751,16 @@ eOSState WebOSDPage::ProcessKey(eKeys Key) {
     if (pixmapVol && (time(NULL) - lastVolumeTime > 3))
         DeleteVolume();
 
+    // Channel keys wait for a call VDR ends the player with: it calls the player with
+    // every pass of its main loop, also without a key. Channel+ and Channel- don't.
+    if (!pendingChannelKeys.empty() && NORMALKEY(Key) != kChanUp && NORMALKEY(Key) != kChanDn) {
+        for (eKeys k : pendingChannelKeys) {
+            cRemote::Put(k);
+        }
+        pendingChannelKeys.clear();
+        return osEnd;
+    }
+
     CheckEmptyPage(Key);
     if (closeEmptyPage) {
         return osEnd;
@@ -790,6 +805,28 @@ eOSState WebOSDPage::ProcessKey(eKeys Key) {
     // and let VDR handle the key in normal viewing mode.
     bool isChannelKey = (key >= k0 && key <= k9) || key == kChanUp || key == kChanDn || key == kChanPrev;
     if (isChannelKey && !(Key & k_Repeat)) {
+        if (key == kChanUp || key == kChanDn) {
+            // With an OSD open VDR switches with these keys itself and then passes
+            // them on, unless a player or the channel display runs (vdr.c). Putting
+            // the key back switched a second time.
+            cMutexLock controlLock;
+            bool vdrSwitched = !cDisplayChannel::IsOpen() && cControl::Control(controlLock) == nullptr &&
+                               (!cDevice::PrimaryDevice()->Replaying() || cDevice::PrimaryDevice()->Transferring());
+            if (vdrSwitched) {
+                dsyslog("[vdrweb] key %d not used by the application, VDR has switched the channel", (int)key);
+                return osEnd;
+            }
+
+            // While a player runs, VDR passes these keys to it, but doesn't end it on
+            // osEnd (vdr.c): the key put back came straight back, endlessly. End the
+            // player with the next call, then VDR switches with the key.
+            if (currentMode == PLAYER) {
+                dsyslog("[vdrweb] key %d not used by the application, end the video for VDR", (int)key);
+                pendingChannelKeys.push_back(key);
+                return osContinue;
+            }
+        }
+
         dsyslog("[vdrweb] key %d not used by the application, pass it to VDR", (int)key);
         cRemote::Put(key);
         return osEnd;
