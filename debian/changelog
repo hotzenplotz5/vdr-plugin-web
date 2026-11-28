@@ -1,3 +1,11 @@
+vdr-plugin-web (0.0.1+git20261126-b621852-1yavdr1+vdrsuite2) unstable; urgency=medium
+
+  * Sync HbbTV channel switching and video lifecycle fixes through upstream b6218529.
+  * Restore VDR-Suite presentation v2 and event-driven QOI patch updates.
+  * Preserve Discovery, Runtime, Media and matching Thrift interfaces.
+
+ -- hotzenplotz5 <hotzenplotz5@gmx.de>  Sat, 28 Nov 2026 10:35:00 +0100
+
 vdr-plugin-web (0.0.1+git20260827-111-34ded50-1yavdr1+vdrsuite1) unstable; urgency=medium
 
   * Preserve Seahawk Debian packaging and original patches.
